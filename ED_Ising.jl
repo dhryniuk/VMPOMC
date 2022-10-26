@@ -2,7 +2,7 @@
 
 
 #Ising bit-basis:
-function generate_bit_basis(N::UInt8)
+function generate_bit_basis(N)#(N::UInt8)
     set::Vector{Vector{Bool}} = [[true], [false]]
     @simd for i in 1:N-1
         new_set::Vector{Vector{Bool}} = []
@@ -19,7 +19,7 @@ function generate_bit_basis(N::UInt8)
 end
 
 #Ising bit-Hamiltonian:
-function make_bit_Hamiltonian(N::UInt8, J::Real, h::Real, basis::Vector{Vector{Bool}})
+function make_bit_Hamiltonian(N, J::Real, h::Real, basis::Vector{Vector{Bool}})#(N::UInt8, J::Real, h::Real, basis::Vector{Vector{Bool}})
     dim::UInt32 = length(basis)
     H::Matrix{Float64} = zeros(dim, dim)
 
