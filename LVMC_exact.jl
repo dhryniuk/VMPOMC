@@ -6,21 +6,22 @@ using BenchmarkTools
 
 J=1.0
 γ=1.0
+N=1
 
 L = make_Liouvillian(J*sx,γ*sz)
 
 display(L)
 #error()
 
-#trial_ρ = [1.0 1+0.0001im; 1-0.41im 0.2]
+trial_ρ = [1.1 0.1; 0.1 1.0]
 #trial_ρ = [0.1 -0.2im; 0.2im 0.9]
 #trial_ρ = [0.5 -0.01im; 0.01im 0.5]
 #trial_ρ = [0.5 -0.9im; 1+0.1im 0.5]
 #trial_ρ = [4*J^2/(4*J^2+γ^2)+0.1 2im*J*γ/(4*J^2+γ^2)+0.1; -2im*J*γ/(4*J^2+γ^2)+0.1 1]
 #trial_ρ = [4/5+0.5 2im*J*γ/(4*J^2+γ^2)+0.5; -2im*J*γ/(4*J^2+γ^2) 1]
-trial_ρ=rand(ComplexF64, 2,2)
+#trial_ρ=rand(ComplexF64, 2*N,2*N)
 #trial_ρ+=conj(trial_ρ)
-trial_ρ/=tr(trial_ρ)
+#trial_ρ/=tr(trial_ρ)
 
 init_trial_ρ = copy(trial_ρ)
 display(init_trial_ρ)
@@ -29,41 +30,21 @@ basis=generate_bit_basis(1)
 display(basis)
 
 
-
-#function vectorize(sket,sbra)
-#    return [sket,1-sket]⊗[sbra,1-sbra]
-#end
-#@btime begin
-    #b=vectorize(rand(0:1),rand(0:1))
-    #display(b)
-#end
-
 dVEC =   Dict((1,1) => [1,0,0,0], (1,0) => [0,1,0,0], (0,1) => [0,0,1,0], (0,0) => [0,0,0,1])
 dUNVEC = Dict([1,0,0,0] => (1,1), [0,1,0,0] => (1,0), [0,0,1,0] => (0,1), [0,0,0,1] => (0,0))
 
 TPSC = [(1,1),(1,0),(0,1),(0,0)]
-
-@btime begin
-    b=dVEC[(rand(0:1),rand(0:1))]
-    #display(b)
-end
-
 
 
 function bra_L(bra,L)
     return transpose(bra)*L
 end
 
-#display(transpose(vec)*L)
-
-
-
 mutable struct density_matrix
     coeff::ComplexF64
     ket::Vector{Int8}
     bra::Vector{Int8}
 end
-
 
 function find_index(i)
     if i==1
@@ -118,7 +99,6 @@ function calculate_mean_local_Lindbladian(J,γ,trial_ρ)
     return mean_local_Lindbladian/Z
 end
 
-
 function calculate_L∇L(J,γ,trial_ρ,ii,jj)
     Z=0
     L∇L=0
@@ -133,21 +113,28 @@ function calculate_L∇L(J,γ,trial_ρ,ii,jj)
 
             s = dVEC[(sample.ket[1],sample.bra[1])]
             bra_L = transpose(s)*L
-            
+
             for i in 1:4
                 loc = bra_L[i]
+                #display(loc)
                 state = TPSC[i]
                 local_L += loc*trial_ρ[find_index(state[1]), find_index(state[2])]
+                #println((ii,jj), " | ", state)
                 if ii==state[1] && jj==state[2]
                     ∇local_L += conj(loc)
                 end
+                #println(conj(loc), " . ", ∇local_L)
             end
+            
+            #println(local_L, " ; ", ∇local_L)
             L∇L+=local_L*∇local_L
         end
     end
     return L∇L/Z
 end
 
+display(calculate_L∇L(J,γ,trial_ρ,0,0))
+error()
 
 function gradient(J,γ,trial_ρ)
     Z = calculate_Z(J,γ,trial_ρ)
@@ -165,9 +152,9 @@ function gradient(J,γ,trial_ρ)
 end
 
 
-#F = gradient(J,γ,trial_ρ)
-#display(F)
-#error()
+F = gradient(J,γ,trial_ρ)
+display(F)
+error()
 
 δχ = 0.01
 @time begin
