@@ -9,7 +9,7 @@ J=1.0
 N=1
 dim = 2^N
 
-l1 = make_Liouvillian(J*sx,γ*sz)
+l1 = make_Liouvillian(J*sx,γ*sm)
 
 display(l1)
 #error()
@@ -116,8 +116,10 @@ function local_Lindbladian(J,γ,A) #should be called mean local lindbladian
     return L_LOCAL/Z#*conj(L_LOCAL)
 end
 
-χ=2
-A_init=rand(ComplexF64, χ,χ,4)
+χ=1
+#A_init=rand(ComplexF64, χ,χ,4)
+A_init=rand(Float64, χ,χ,4)
+A=copy(A_init)
 
 sample = density_matrix(1,[1],[0])
 M = MPO(sample,A_init)
@@ -126,16 +128,16 @@ M = MPO(sample,A_init)
 #display(M)
 
 
-χ=1
-A=zeros(ComplexF64, χ,χ,4)
-A[:, :, 1] .= 1.1
-A[:, :, 2] .= 0.1
-A[:, :, 3] .= 0.1
-A[:, :, 4] .= 1
-val = local_Lindbladian(J,γ,A)
-display(val)
+#χ=1
+#A=zeros(ComplexF64, χ,χ,4)
+#A[:, :, 1] .= 1.1
+#A[:, :, 2] .= 0.1
+#A[:, :, 3] .= 0.1
+#A[:, :, 4] .= 1
+#val = local_Lindbladian(J,γ,A)
+#display(val)
 
-display(MPO_Z(A))
+#display(MPO_Z(A))
 
 #error()
 
@@ -222,12 +224,19 @@ function calculate_gradient(J,γ,A,ii,jj,u)
 end
 
 
+function normalize_MPO(A)
+    MPO=Matrix{ComplexF64}(I, χ, χ)
+    for i::UInt8 in 1:N
+        MPO*=(A[:,:,dINDEX[1,1]]+A[:,:,dINDEX[0,0]])
+    end
+    return tr(MPO)::ComplexF64
+end
 
 
 g = calculate_gradient(J,γ,A,1,1,(0,0))
 display(g)
 
-δχ = 0.01
+δχ = 0.1
 @time begin
     for k in 1:1000
         i=1
@@ -237,7 +246,7 @@ display(g)
             new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,γ,A,i,j,u))
         end
         global A = new_A
-        #global A./=tr(A)
+        global A./=normalize_MPO(A)
         println(local_Lindbladian(J,γ,A))
     end
 end
