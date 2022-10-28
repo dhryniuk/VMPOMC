@@ -116,7 +116,7 @@ function local_Lindbladian(J,γ,A) #should be called mean local lindbladian
     return L_LOCAL/Z#*conj(L_LOCAL)
 end
 
-χ=1
+χ=2
 #A_init=rand(ComplexF64, χ,χ,4)
 A_init=rand(Float64, χ,χ,4)
 A=copy(A_init)
@@ -149,7 +149,8 @@ function B_list(m, sample, A) #FIX m ORDERING
     #    push!(B_list,A[:,:,dINDEX[(sample.ket[mod(m+j-1,N)+1],sample.bra[mod(m+j-1,N)+1])]])
     #end
     #return B_list
-    return 1
+    #return 1
+    return [[1 0; 0 1]]
 end
 
 function derv_MPO(i, j, u, sample, A)
@@ -158,6 +159,8 @@ function derv_MPO(i, j, u, sample, A)
         #println(u, " | ", sample)
         if u == sample #(sample.ket[m],sample.bra[m])
             B = prod(B_list(m, sample, A))
+            #println(i,j)
+            #println(B_list(m, sample, A))
             sum += B[i,j] + B[j,i]
         end
     end
@@ -236,14 +239,16 @@ end
 g = calculate_gradient(J,γ,A,1,1,(0,0))
 display(g)
 
-δχ = 0.1
+δχ = 0.01
 @time begin
     for k in 1:1000
-        i=1
-        j=1
         new_A=zeros(ComplexF64, χ,χ,4)
-        for u in TPSC
-            new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,γ,A,i,j,u))
+        for i in 1:χ
+            for j in 1:χ
+                for u in TPSC
+                    new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,γ,A,i,j,u))
+                end
+            end
         end
         global A = new_A
         global A./=normalize_MPO(A)
