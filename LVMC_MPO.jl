@@ -6,7 +6,7 @@ using BenchmarkTools
 
 J=1.0
 γ=1.0
-N=2
+N=6
 dim = 2^N
 
 l1 = make_Liouvillian(J*sx,γ*sm)
@@ -90,11 +90,12 @@ function local_Lindbladian(J,γ,A) #should be called mean local lindbladian
         for l in 1:dim
             sample = density_matrix(1,basis[k],basis[l]) #replace by Monte Carlo
             ρ_sample = MPO(sample,A)
+            local_L=0
             for j in 1:N
-                local_L=0
+                #local_L=0
                 s = dVEC[(sample.ket[j],sample.bra[j])]
                 bra_L = transpose(s)*l1
-                #display(bra_L)
+                #println(bra_L)
 
                 for i in 1:4
                     loc = bra_L[i]
@@ -102,11 +103,14 @@ function local_Lindbladian(J,γ,A) #should be called mean local lindbladian
                     local_L += loc*MPO_inserted(sample,A,j,state)
                 end
 
-                local_L/=ρ_sample
-            
-                L_LOCAL+=local_L*conj(local_L)*ρ_sample*conj(ρ_sample)
+                #println(local_L)
+
+                #local_L/=ρ_sample
+                #L_LOCAL+=local_L*conj(local_L)#*ρ_sample*conj(ρ_sample)
                 #println(local_L*conj(local_L))
             end
+            #local_L/=ρ_sample
+            L_LOCAL+=local_L*conj(local_L)#*ρ_sample*conj(ρ_sample)
         end
     end
 
@@ -131,8 +135,8 @@ end
 #χ=1
 A=zeros(ComplexF64, χ,χ,4)
 A[:, :, 1] .= 0.5
-A[:, :, 2] .= 0.2im
-A[:, :, 3] .= -0.2im
+A[:, :, 2] .= 0.15im
+A[:, :, 3] .= -0.15im
 A[:, :, 4] .= 0.5
 #val = local_Lindbladian(J,γ,A)
 #display(val)
@@ -150,14 +154,12 @@ A[:, :, 4] .= 0.5
 
 #GRADIENT:
 function B_list(m, sample, A) #FIX m ORDERING
-    #B_list=Matrix{ComplexF64}[]
-    #for j::UInt8 in 1:N-1 #fix N=1 case!
-    #    push!(B_list,A[:,:,dINDEX[(sample.ket[mod(m+j-1,N)+1],sample.bra[mod(m+j-1,N)+1])]])
-    #end
-    #return B_list
-    #return 1
-    #return [[1 0; 0 1]]
-    return [Matrix{Int}(I, χ, χ)]#[[1 0; 0 1]]
+    B_list=Matrix{ComplexF64}[]
+    for j::UInt8 in 1:N-1 #fix N=1 case!
+        push!(B_list,A[:,:,dINDEX[(sample.ket[mod(m+j-1,N)+1],sample.bra[mod(m+j-1,N)+1])]])
+    end
+    return B_list
+    #return [Matrix{Int}(I, χ, χ)]
 end
 
 function derv_MPO(i, j, u, sample, A)
@@ -179,6 +181,10 @@ function derv_MPO(i, j, u, sample, A)
     return sum#/MPO(density_matrix(1,[sample[1]],[sample[2]]),A)
 end
 
+function Δ_MPO(i, j, u, sample, A)
+    return derv_MPO(i, j, u, sample, A)/MPO(sample, A)
+end
+
 function calculate_gradient(J,γ,A,ii,jj,u)
     L∇L=0
     ΔLL=0
@@ -193,10 +199,13 @@ function calculate_gradient(J,γ,A,ii,jj,u)
             sample = density_matrix(1,basis[k],basis[l]) #replace by Monte Carlo
             ρ_sample = MPO(sample,A)
 
+            local_L=0
+            local_∇L=0
+
             #L∇L*:
             for j in 1:N
-                local_L=0
-                local_∇L=0
+                #local_L=0
+                #local_∇L=0
                 s = dVEC[(sample.ket[j],sample.bra[j])]
                 bra_L = transpose(s)*l1
                 #display(bra_L)
@@ -209,9 +218,9 @@ function calculate_gradient(J,γ,A,ii,jj,u)
                     micro_sample = sample
                     micro_sample.ket[j] = state[1]
                     micro_sample.bra[j] = state[2]
-                    local_∇L+= conj(loc)*derv_MPO(ii,jj,u,micro_sample,A_conjugate) #state,u or u,state?
-                    #println(conj(loc), " . ", local_∇L)
-                    #println(conj(loc), " . ", derv_MPO(ii,jj,u,state,A_conjugate))
+                    #local_∇L+= conj(loc)*derv_MPO(ii,jj,u,micro_sample,A_conjugate) #state,u or u,state?
+                    local_∇L+= conj(loc)*MPO(micro_sample, A)*Δ_MPO(ii,jj,u,micro_sample,A)
+
                     #2-local part:
                     #TBD
                 end
@@ -219,14 +228,17 @@ function calculate_gradient(J,γ,A,ii,jj,u)
                 #local_L /=ρ_sample
                 #local_∇L/=conj(ρ_sample)
             
-                #println(local_L, " ; ", local_∇L)
-                L∇L+=local_L*local_∇L
+                #L∇L+=local_L*local_∇L
             end
+            L∇L+=local_L*local_∇L
 
             #ΔLL:
             local_Δ=0
-            local_Δ+=MPO(sample,A)*derv_MPO(ii,jj,u,sample,A_conjugate)
+            #local_Δ+=MPO(sample,A)*MPO(sample, A_conjugate)*derv_MPO(ii,jj,u,sample,A_conjugate)
+            local_Δ+=MPO(sample,A)*conj(MPO(sample, A))*derv_MPO(ii,jj,u,sample,A_conjugate)
+            #local_Δ+=derv_MPO(ii,jj,u,sample,A)
 
+            #ΔLL+=conj(local_Δ)
             ΔLL+=local_Δ
         end
     end
@@ -250,28 +262,20 @@ function normalize_MPO(A)
     return tr(MPO)^(1/N)#::ComplexF64
 end
 
-function normalize2_MPO(A)
-    MPO=Matrix{ComplexF64}(I, χ, χ)
-    for i::UInt8 in 1:N
-        MPO*=(A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]])#/2
-        #MPO*=(A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(1,0)]]+A[:,:,dINDEX[(0,1)]]+A[:,:,dINDEX[(0,0)]])
-    end
-    return tr(MPO)#::ComplexF64
-end
-
-#error()
 
 g = calculate_gradient(J,γ,A,1,1,(0,0))
 display(g)
 
-δχ = 0.003
+δχ = 0.03
+Q=0.98
 @time begin
-    for k in 1:1000
+    for k in 1:800
         new_A=zeros(ComplexF64, χ,χ,4)
         for i in 1:χ
             for j in 1:χ
                 for u in TPSC
-                    new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,γ,A,i,j,u))
+                    new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - rand()*δχ*Q^k*sign.(calculate_gradient(J,γ,A,i,j,u))
+                    #new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,γ,A,i,j,u))
                 end
             end
         end
