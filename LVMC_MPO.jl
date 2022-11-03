@@ -4,8 +4,8 @@ include("ED_Lindblad.jl")
 using BenchmarkTools
 
 
-J=0.0
-h=0.0
+J=1.0
+h=1.0
 γ=1.0
 N=2
 dim = 2^N
@@ -112,19 +112,19 @@ function local_Lindbladian(J,h,γ,A) #should be called mean local lindbladian
     return L_LOCAL/Z#*conj(L_LOCAL)
 end
 
-χ=1
-#A_init=rand(ComplexF64, χ,χ,4)
-#A=copy(A_init)
+χ=2
+A_init=rand(ComplexF64, χ,χ,4)
+A=copy(A_init)
 
 #println(local_Lindbladian(J,h,γ,A))
 
 #error()
 
-A=zeros(ComplexF64, χ,χ,4)
-A[:, :, 1] .= 0.7
-A[:, :, 2] .= 0.2im
-A[:, :, 3] .= -0.1im
-A[:, :, 4] .= 0.3
+#A=zeros(ComplexF64, χ,χ,4)
+#A[:, :, 1] .= 0.7
+#A[:, :, 2] .= 0.2im
+#A[:, :, 3] .= -0.1im
+#A[:, :, 4] .= 0.3
 
 #id = Matrix{Int}(I, χ, χ)
 #A=zeros(ComplexF64, χ,χ,4)
@@ -227,6 +227,7 @@ function calculate_gradient(J,h,γ,A,ii,jj,u)
                 l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,N)+1]-1)
                 l_int += -1.0im*J*(l_int_α-l_int_β)
 
+                #println(l_int)
                 #local_L /=ρ_sample
                 #local_∇L/=conj(ρ_sample)
             
@@ -238,7 +239,7 @@ function calculate_gradient(J,h,γ,A,ii,jj,u)
             #local_∇L+=conj(l_int)*conj(MPO(sample, A))*Δ_MPO(ii,jj,u,sample,A)
             #local_L +=conj(l_int*ρ_sample)
             #local_∇L+=l_int*Δ_MPO(ii,jj,u,sample,A)
-            local_L +=l_int
+            local_L +=l_int*MPO(sample, A)
             #local_∇L+=l_int*Δ_MPO(ii,jj,u,sample,A_conjugate)
             local_∇L+=l_int*derv_MPO(ii,jj,u,sample,A)
 
@@ -253,7 +254,9 @@ function calculate_gradient(J,h,γ,A,ii,jj,u)
             #local_Δ+=MPO(sample,A)*conj(MPO(sample, A))*Δ_MPO(ii,jj,u,sample,A_conjugate) #ΔMPO
             #local_Δ=p_sample*conj(Δ_MPO(ii,jj,u,sample,A)) #conj()
             #local_Δ=ρ_sample*conj(derv_MPO(ii,jj,u,sample,A))
-            local_Δ=MPO(sample,A)*derv_MPO(ii,jj,u,sample,A_conjugate)
+
+            #local_Δ=MPO(sample,A)*derv_MPO(ii,jj,u,sample,A_conjugate)
+            local_Δ=MPO(sample,A)*conj(derv_MPO(ii,jj,u,sample,A))
 
             #println("THEN:   ", sample)
             #ΔLL+=conj(local_Δ)
@@ -365,24 +368,24 @@ display(g)
 #display(g)
 #error()
 
-δχ = 0.003
+δχ = 0.01
 Q=0.99
 @time begin
-    for k in 1:500
+    for k in 1:1500
         new_A=zeros(ComplexF64, χ,χ,4)
         for i in 1:χ
             for j in 1:χ
                 for u in TPSC
                     #new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - (1+rand())*δχ*Q*sign.(calculate_gradient(J,h,γ,A,i,j,u))
-                    #new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - (1+rand())*δχ*Q*sign.(calculate_gradient(J,h,γ,A,i,j,u))
+                    new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - (1+rand())*δχ*Q*sign.(calculate_gradient(J,h,γ,A,i,j,u))
                     #new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - rand()*δχ*Q^k*sign.(calculate_gradient(J,h,γ,A,i,j,u))
-                    new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,h,γ,A,i,j,u))
+                    #new_A[i,j,dINDEX[u]] = A[i,j,dINDEX[u]] - δχ*(calculate_gradient(J,h,γ,A,i,j,u))
                 end
             end
         end
         global A = new_A
         global A./=normalize_MPO(A)
-        #global Q=sqrt(local_Lindbladian(J,h,γ,A))
+        global Q=sqrt(local_Lindbladian(J,h,γ,A))
         println(local_Lindbladian(J,h,γ,A))
     end
 end
