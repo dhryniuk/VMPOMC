@@ -1,11 +1,12 @@
 using LinearAlgebra
 include("ED_Ising.jl")
 include("ED_Lindblad.jl")
+using Plots
 
 const J=1.0 #interaction strength
 const h=1.0 #transverse field strength
 const γ=1.0 #spin decay rate
-const N=6
+const N=4
 const dim = 2^N
 
 #Make single-body Lindbladian:
@@ -81,7 +82,7 @@ function R_MPO_strings(sample, A) # BEWARE OF NUMBERING
     return R
 end
 
-χ=4
+χ=3
 A_init=rand(ComplexF64, χ,χ,2,2)
 A=copy(A_init)
 A=reshape(A,χ,χ,4)
@@ -226,31 +227,6 @@ function Mono_Metropolis_sweep_right(sample, A, R_set)
     return sample, L_set
 end
 
-function Single_Metropolis(sample, A, i)
-
-    function draw_excluded(u)
-        v = rand(1:3)
-        if v>=u
-            v+=1
-        end
-        return v
-    end
-
-    C = MPO(sample, A)
-    #i=rand(1:N)
-
-    sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
-    u = dINDEX[(sample.ket[i],sample.bra[i])]
-    v = draw_excluded(u)
-    (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[v]
-    P = MPO(sample_p, A)
-    metropolis_prob = real((P*conj(P))/(C*conj(C)))
-    if rand() <= metropolis_prob
-        sample = sample_p
-    end
-
-    return sample
-end
 
 function calculate_mean_local_Lindbladian(J,A)
     mll=0
@@ -330,6 +306,9 @@ function MC_mean_local_Lindbladian(J,A,N_MC)
     return mll/N_MC
 end
 
+
+#plot_running_average(J,A,10000)
+#error()
 
 
 #ex = calculate_mean_local_Lindbladian(J,A)
@@ -465,8 +444,6 @@ end
 function calculate_gradient(J,A)
     L∇L=zeros(ComplexF64,χ,χ,4)
     ΔLL=zeros(ComplexF64,χ,χ,4)
-    #L∇L=Array{ComplexF64}(undef,χ,χ,4)
-    #ΔLL=Array{ComplexF64}(undef,χ,χ,4)
     Z=0
 
     mean_local_Lindbladian = 0
@@ -494,7 +471,7 @@ function calculate_gradient(J,A)
                     loc = bra_L[i]
                     if loc!=0
                         state = TPSC[i]
-                        local_L += loc*tr(L_set[j]*A[:,:,dINDEX[(state[1],state[2])]]*R_set[N+1-j]) #add if condition for loc=0
+                        local_L += loc*tr(L_set[j]*A[:,:,dINDEX[(state[1],state[2])]]*R_set[N+1-j])
                         micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
                         micro_sample.ket[j] = state[1]
                         micro_sample.bra[j] = state[2]
@@ -515,7 +492,7 @@ function calculate_gradient(J,A)
             Δ_MPO_sample = OLDderv_MPO(sample,A)/ρ_sample
     
             #Add in interaction terms:
-            local_L +=l_int#*MPO(sample, A)
+            local_L +=l_int
             local_∇L+=l_int*Δ_MPO_sample
     
             L∇L+=p_sample*local_L*conj(local_∇L)
@@ -528,8 +505,146 @@ function calculate_gradient(J,A)
             mean_local_Lindbladian += p_sample*local_L*conj(local_L)
         end
     end
-    ΔLL*=mean_local_Lindbladian/Z
-    return (L∇L-ΔLL)/Z, mean_local_Lindbladian/Z
+    mean_local_Lindbladian/=Z
+    ΔLL*=mean_local_Lindbladian
+    return (L∇L-ΔLL)/Z, mean_local_Lindbladian
+end
+
+function SR_calculate_gradient(J,A)
+    L∇L=zeros(ComplexF64,χ,χ,4)
+    ΔLL=zeros(ComplexF64,χ,χ,4)
+    Z=0
+
+    mean_local_Lindbladian = 0
+
+    # Metric tensor auxiliary arrays:
+    S = zeros(ComplexF64,4*χ^2,4*χ^2)
+    G = zeros(ComplexF64,χ,χ,4)
+    Left = zeros(ComplexF64,χ,χ,4)
+    Right = zeros(ComplexF64,χ,χ,4)
+    function flatten_index(i,j,s)
+        #return j+χ*(i-1)+χ^2*(s-1)
+        return i+χ*(j-1)+χ^2*(s-1)
+    end
+
+    for k in 1:dim
+        for l in 1:dim
+            sample = density_matrix(1,basis[k],basis[l])
+            L_set = L_MPO_strings(sample, A)
+            R_set = R_MPO_strings(sample, A)
+            ρ_sample = tr(L_set[N+1])
+            p_sample = ρ_sample*conj(ρ_sample)
+            Z+=p_sample
+
+            local_L=0
+            local_∇L=zeros(ComplexF64,χ,χ,4)
+            l_int = 0
+
+            #L∇L*:
+            for j in 1:N
+
+                #1-local part:
+                s = dVEC[(sample.ket[j],sample.bra[j])]
+                bra_L = transpose(s)*l1
+                for i in 1:4
+                    loc = bra_L[i]
+                    if loc!=0
+                        state = TPSC[i]
+                        local_L += loc*tr(L_set[j]*A[:,:,dINDEX[(state[1],state[2])]]*R_set[N+1-j])
+                        micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
+                        micro_sample.ket[j] = state[1]
+                        micro_sample.bra[j] = state[2]
+                        
+                        local_∇L+= loc*OLDderv_MPO(micro_sample,A)
+                    end
+                end
+
+                #2-local part:
+                l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,N)+1]-1)
+                l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,N)+1]-1)
+                l_int += -1.0im*J*(l_int_α-l_int_β)
+            end
+
+            local_L /=ρ_sample
+            local_∇L/=ρ_sample
+    
+            Δ_MPO_sample = OLDderv_MPO(sample,A)/ρ_sample
+    
+            #Add in interaction terms:
+            local_L +=l_int
+            local_∇L+=l_int*Δ_MPO_sample
+    
+            L∇L+=p_sample*local_L*conj(local_∇L)
+    
+            #ΔLL:
+            local_Δ=p_sample*conj(Δ_MPO_sample)
+            ΔLL+=local_Δ
+    
+            #Mean local Lindbladian:
+            mean_local_Lindbladian += p_sample*local_L*conj(local_L)
+
+            #Metric tensor:
+            #sample_dag = density_matrix(1,sample.bra,sample.ket)
+            #G_dag = conj(OLDderv_MPO(sample_dag,A)/MPO(sample_dag,A))
+            G = Δ_MPO_sample
+            #Left += p_sample*G
+            #Right+= p_sample*conj(G)
+            Left += p_sample*conj(G)
+            #Left += p_sample*G#G_dag
+            Right+= p_sample*G
+            for s in 1:4
+                for j in 1:χ
+                    for i in 1:χ
+                        for ss in 1:4
+                            for jj in 1:χ
+                                for ii in 1:χ
+                                    S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*conj(G[i,j,s])*G[ii,jj,ss]
+                                    #S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(S[flatten_index(i,j,s),flatten_index(ii,jj,ss)])
+                                    #S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*conj(G[i,j,s])*G[ii,jj,ss]
+                                    #S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*G[i,j,s]*conj(G[ii,jj,ss])
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    mean_local_Lindbladian/=Z
+    ΔLL*=mean_local_Lindbladian
+
+    #Metric tensor:
+    S./=Z
+    Left./=Z
+    Right./=Z
+    for s in 1:4
+        for j in 1:χ
+            for i in 1:χ
+                for ss in 1:4
+                    for jj in 1:χ
+                        for ii in 1:χ
+                            S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]# + conj(Left[i,j,s]*Right[ii,jj,ss])
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    #display(eigen(S+0.0001*Matrix{Int}(I, χ*χ*4, χ*χ*4)))
+    #display(S)
+
+    S+=+0.001*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+
+    #display(S)
+
+    grad = (L∇L-ΔLL)/Z
+    #grad./=maximum(abs.(grad))
+    flat_grad = reshape(grad,4*χ^2)
+    flat_grad = inv(S)*flat_grad
+    grad = reshape(flat_grad,χ,χ,4)
+
+    return grad, mean_local_Lindbladian
 end
 
 function calculate_MC_gradient_partial(J,A,N_MC)
@@ -842,7 +957,7 @@ function SRMC_gradient_full(J,A,N_MC)
 
     #display(S)
 
-    S+=+0.001*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    S+=+0.01*Matrix{Int}(I, χ*χ*4, χ*χ*4)
 
     grad = (L∇L-ΔLL)/N_MC
     flat_grad = reshape(grad,4*χ^2)
@@ -873,27 +988,49 @@ end
 #error()
 
 A./=normalize_MPO(A)
-N_MC=200
+N_MC=1000
 
-δ = 0.03
-Q=0.95
+B=deepcopy(A)
+
+δ = 0.05
+
+Q=1
+QB=1
+F=0.995
 @time begin
+    #display(A)
+    #display(B)
+    #error()
     for k in 1:1000
+
         new_A=zeros(ComplexF64, χ,χ,4)
-        #new_A = A - (1+rand())*δ*Q*sign.(calculate_MC_gradient(J,A))
-        #∇,L=calculate_gradient(J,A)
+        #∇,L=SR_calculate_gradient(J,A)
+        ∇,L=SR_calculate_gradient(J,A)
         #∇,L=calculate_MC_gradient_full(J,A,N_MC+5*k)
-        ∇,L=SRMC_gradient_full(J,A,N_MC+5*k)
+        #∇,L=SRMC_gradient_full(J,A,N_MC+10*k)
         ∇./=maximum(abs.(∇))
         #new_A = A - δ*Q*(sign.(∇).+0.01*rand())
-        new_A = A - δ*Q*∇.*(1+0.01*rand())
+        new_A = A - 2.5*δ*Q*F^(2*k)*∇.*(1+0.1*rand())
 
         global A = new_A
         global A./=normalize_MPO(A)
-        Lex=calculate_mean_local_Lindbladian(J,A)
+        #Lex=calculate_mean_local_Lindbladian(J,A)
         #global Q=sqrt(calculate_mean_local_Lindbladian(J,A))
-        global Q=sqrt(L)
-        println("k=$k: ", real(L), " ; ", real(Lex))
+        #global Q=sqrt(L)
+        #println("k=$k: ", real(L), " ; ", real(Lex))
+        #println("k=$k: ", real(L))
+
+        new_B=zeros(ComplexF64, χ,χ,4)
+        #∇B,LB=calculate_MC_gradient_full(J,B,N_MC+10*k)
+        ∇B,LB=calculate_gradient(J,B)
+        ∇B./=maximum(abs.(∇B))
+        new_B = B - 1.0*δ*QB*F^k*∇B.*(1+0.1*rand())
+        global B = new_B
+        global B./=normalize_MPO(B)
+
+        #global QB=sqrt(calculate_mean_local_Lindbladian(J,B))
+
+        println("k=$k: ", real(L), " ; ", real(LB))
     end
 end
 
