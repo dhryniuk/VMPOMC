@@ -1,4 +1,4 @@
-using LinearAlgebra
+export Mono_Metropolis_sweep_left, Mono_Metropolis_sweep_right, local_Lindbladian, calculate_mean_local_Lindbladian,  MC_mean_local_Lindbladian
 
 #Sweep lattice from right to left:
 function Dual_Metropolis_sweep(sample, A, L_set)
@@ -39,7 +39,7 @@ function Dual_Metropolis_sweep(sample, A, L_set)
     return sample, R_set
 end
 
-function Mono_Metropolis_sweep(sample, A, L_set)
+function Mono_Metropolis_sweep_left(sample, A, L_set)
 
     function draw_excluded(u)
         v = rand(1:3)
@@ -48,7 +48,6 @@ function Mono_Metropolis_sweep(sample, A, L_set)
         end
         return v
     end
-
 
     R_set = []
     R = Matrix{ComplexF64}(I, χ, χ)
@@ -63,18 +62,21 @@ function Mono_Metropolis_sweep(sample, A, L_set)
         P = tr(L_set[i]*A[:,:,v]*R_set[N+1-i])
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         if rand() <= metropolis_prob
-            sample = sample_p
+            #sample = sample_p
+            sample.ket = deepcopy(sample_p.ket)
+            sample.bra = deepcopy(sample_p.bra)
         end
 
-        R*= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
+        R = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*R
         push!(R_set, copy(R))
         C = tr(L_set[i]*R)
-
+    
+    #    C = tr(L_set[i]*R_set[N+2-i])
     end
     return sample, R_set
 end
 
-function Random_Metropolis(sample, A)
+function Mono_Metropolis_sweep_right(sample, A, R_set)
 
     function draw_excluded(u)
         v = rand(1:3)
@@ -84,68 +86,63 @@ function Random_Metropolis(sample, A)
         return v
     end
 
-    C = MPO(sample, A)
-    i=rand(1:N)
+    L_set = []
+    L = Matrix{ComplexF64}(I, χ, χ)
+    push!(L_set, copy(L))
+    C = tr(R_set[N+1]) #Current MPO  ---> move into loop
+    for i in 1:N
 
-    sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
-    u = dINDEX[(sample.ket[i],sample.bra[i])]
-    v = draw_excluded(u)
-    (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[v]
-    P = MPO(sample_p, A)
-    metropolis_prob = real((P*conj(P))/(C*conj(C)))
-    if rand() <= metropolis_prob
-        sample = sample_p
-    end
-
-    return sample
-end
-
-
-
-function check_MC_dist(N_MC)
-    #B = zeros(dim,dim)
-    B = zeros(4,4,4)
-    sample = density_matrix(1,basis[1],basis[1])
-    L_set = L_MPO_strings(sample,A)
-    for i in 1:N_MC
-        sample, R_set = Mono_Metropolis_sweep(sample, A, L_set)
-        #sample = Random_Metropolis_sweep(sample, A)
-        #display(sample)
-        L_set = L_MPO_strings(sample,A)
-        a = dINDEX[(sample.ket[1],sample.bra[1])]
-        b = dINDEX[(sample.ket[2],sample.bra[2])]
-        c = dINDEX[(sample.ket[3],sample.bra[3])]
-        B[a,b,c]+=1
-    end
-    display(B./N_MC)
-end
-
-function check_MPO_dist()
-    #B = zeros(dim,dim)
-    B = zeros(4,4,4)
-    Z=0
-    for k in 1:dim
-        for l in 1:dim
-            sample = density_matrix(1,basis[k],basis[l]) 
-            ρ_sample = MPO(sample,A)
-            p_sample = ρ_sample*conj(ρ_sample)
-            Z+=p_sample
-            #B[k,l] = p_sample
-            a = dINDEX[(sample.ket[1],sample.bra[1])]
-            b = dINDEX[(sample.ket[2],sample.bra[2])]
-            c = dINDEX[(sample.ket[3],sample.bra[3])]
-            B[a,b,c]=p_sample
+        sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
+        u = dINDEX[(sample.ket[i],sample.bra[i])]
+        v = draw_excluded(u)
+        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[v]
+        P = tr(L_set[i]*A[:,:,v]*R_set[N+1-i])
+        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        if rand() <= metropolis_prob
+            sample = sample_p
         end
-    end
 
-    display(real(B./Z))
+        L*= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
+        push!(L_set, copy(L))
+        C = tr(L*R_set[N+1-i])
+
+    end
+    return sample, L_set
 end
 
 
-#check_MC_dist(1000000)
-#check_MPO_dist()
-#error()
 
+#MOVE TO ANOTHER FILE:
+
+function local_Lindbladian(J,A,sample,L_set,R_set)
+
+    local_L=0
+    l_int = 0
+    for j in 1:N
+
+        #1-local part:
+        s = dVEC[(sample.ket[j],sample.bra[j])]
+        bra_L = transpose(s)*l1
+        for i in 1:4
+            loc = bra_L[i]
+            if loc!=0
+                state = TPSC[i]
+                local_L += loc*tr(L_set[j]*A[:,:,dINDEX[(state[1],state[2])]]*R_set[N+1-j]) #add if condition for loc=0
+            end
+        end
+
+        #2-local part: #PBC
+        l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,N)+1]-1)
+        l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,N)+1]-1)
+        l_int += -1.0im*J*(l_int_α-l_int_β)
+
+    end
+
+    local_L/=tr(R_set[N+1])
+    local_L+=l_int#*MPO(sample,A)
+
+    return local_L
+end
 
 function calculate_mean_local_Lindbladian(J,A)
     mll=0
@@ -173,11 +170,17 @@ function MC_mean_local_Lindbladian(J,A,N_MC)
     mll=0
     sample = density_matrix(1,basis[1],basis[1]) 
     L_set = L_MPO_strings(sample,A)
+    R_set = R_MPO_strings(sample,A)
     for k in 1:N_MC
-        #sample, R_set = Mono_Metropolis_sweep(sample, A, L_set)
-        sample = Random_Metropolis(sample, A)
+        sample, R_set = Mono_Metropolis_sweep_left(sample, A, L_set)
+        #sample, L2_set = Mono_Metropolis_sweep_right(sample, A, R_set)
+        #sample = Single_Metropolis(sample, A, rand(1:N))
+        #for i in 1:N
+        #    sample = Single_Metropolis(sample, A, i)
+        #end
         L_set = L_MPO_strings(sample,A)
-        R_set = R_MPO_strings(sample,A)
+        #R_set = R_MPO_strings(sample,A)
+        #println(R2_set==R_set)
 
         local_L = local_Lindbladian(J,A,sample,L_set,R_set)
 
@@ -186,14 +189,3 @@ function MC_mean_local_Lindbladian(J,A,N_MC)
 
     return mll/N_MC
 end
-
-
-#ex = calculate_mean_local_Lindbladian(J,A)
-#mc = MC_mean_local_Lindbladian(J,A,100000)
-
-#display(ex)
-#display(mc)
-
-#check_MC_dist(100000)
-#check_MPO_dist()
-#error()
