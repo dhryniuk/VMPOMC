@@ -139,7 +139,7 @@ function local_Lindbladian(J,A,sample,L_set,R_set)
     end
 
     local_L/=tr(R_set[N+1])
-    local_L+=l_int#*MPO(sample,A)
+    local_L+=l_int
 
     return local_L
 end

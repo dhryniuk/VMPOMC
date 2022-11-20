@@ -1,4 +1,3 @@
-
 function SR_calculate_gradient(J,A)
     L∇L=zeros(ComplexF64,χ,χ,4)
     ΔLL=zeros(ComplexF64,χ,χ,4)
@@ -12,7 +11,6 @@ function SR_calculate_gradient(J,A)
     Left = zeros(ComplexF64,χ,χ,4)
     Right = zeros(ComplexF64,χ,χ,4)
     function flatten_index(i,j,s)
-        #return j+χ*(i-1)+χ^2*(s-1)
         return i+χ*(j-1)+χ^2*(s-1)
     end
 
@@ -29,6 +27,10 @@ function SR_calculate_gradient(J,A)
             local_∇L=zeros(ComplexF64,χ,χ,4)
             l_int = 0
 
+            L_set = Vector{Matrix{ComplexF64}}()
+            L=Matrix{ComplexF64}(I, χ, χ)
+            push!(L_set,copy(L))
+
             #L∇L*:
             for j in 1:N
 
@@ -44,7 +46,9 @@ function SR_calculate_gradient(J,A)
                         micro_sample.ket[j] = state[1]
                         micro_sample.bra[j] = state[2]
                         
-                        local_∇L+= loc*OLDderv_MPO(micro_sample,A)
+                        micro_L_set = L_MPO_strings(micro_sample, A)
+                        micro_R_set = R_MPO_strings(micro_sample, A)
+                        local_∇L+= loc*derv_MPO(micro_sample,micro_L_set,micro_R_set)
                     end
                 end
 
@@ -52,12 +56,16 @@ function SR_calculate_gradient(J,A)
                 l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,N)+1]-1)
                 l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,N)+1]-1)
                 l_int += -1.0im*J*(l_int_α-l_int_β)
+
+                #Update L_set:
+                L*=A[:,:,dINDEX[(sample.ket[j],sample.bra[j])]]
+                push!(L_set,copy(L))
             end
 
             local_L /=ρ_sample
             local_∇L/=ρ_sample
     
-            Δ_MPO_sample = OLDderv_MPO(sample,A)/ρ_sample
+            Δ_MPO_sample = derv_MPO(sample,L_set,R_set)/ρ_sample
     
             #Add in interaction terms:
             local_L +=l_int
@@ -73,29 +81,11 @@ function SR_calculate_gradient(J,A)
             mean_local_Lindbladian += p_sample*local_L*conj(local_L)
 
             #Metric tensor:
-            #sample_dag = density_matrix(1,sample.bra,sample.ket)
-            #G_dag = conj(OLDderv_MPO(sample_dag,A)/MPO(sample_dag,A))
             G = Δ_MPO_sample
-            #Left += p_sample*G
-            #Right+= p_sample*conj(G)
             Left += p_sample*conj(G)
-            #Left += p_sample*G#G_dag
             Right+= p_sample*G
-            for s in 1:4
-                for j in 1:χ
-                    for i in 1:χ
-                        for ss in 1:4
-                            for jj in 1:χ
-                                for ii in 1:χ
-                                    S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*conj(G[i,j,s])*G[ii,jj,ss]
-                                    #S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(S[flatten_index(i,j,s),flatten_index(ii,jj,ss)])
-                                    #S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*conj(G[i,j,s])*G[ii,jj,ss]
-                                    #S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*G[i,j,s]*conj(G[ii,jj,ss])
-                                end
-                            end
-                        end
-                    end
-                end
+            for s in 1:4, j in 1:χ, i in 1:χ, ss in 1:4, jj in 1:χ, ii in 1:χ
+                S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += p_sample*conj(G[i,j,s])*G[ii,jj,ss]
             end
         end
     end
@@ -106,29 +96,13 @@ function SR_calculate_gradient(J,A)
     S./=Z
     Left./=Z
     Right./=Z
-    for s in 1:4
-        for j in 1:χ
-            for i in 1:χ
-                for ss in 1:4
-                    for jj in 1:χ
-                        for ii in 1:χ
-                            S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]# + conj(Left[i,j,s]*Right[ii,jj,ss])
-                        end
-                    end
-                end
-            end
-        end
+    for s in 1:4, j in 1:χ, i in 1:χ, ss in 1:4, jj in 1:χ, ii in 1:χ
+        S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
     end
-
-    #display(eigen(S+0.0001*Matrix{Int}(I, χ*χ*4, χ*χ*4)))
-    #display(S)
 
     S+=+0.001*Matrix{Int}(I, χ*χ*4, χ*χ*4)
 
-    #display(S)
-
     grad = (L∇L-ΔLL)/Z
-    #grad./=maximum(abs.(grad))
     flat_grad = reshape(grad,4*χ^2)
     flat_grad = inv(S)*flat_grad
     grad = reshape(flat_grad,χ,χ,4)
@@ -137,7 +111,7 @@ function SR_calculate_gradient(J,A)
 end
 
 
-function SRMC_gradient_full(J,A,N_MC,step)
+function SRMC_gradient_full(J,A,N_MC,N_sweeps,step)
     L∇L=zeros(ComplexF64,χ,χ,4)
     ΔLL=zeros(ComplexF64,χ,χ,4)
 
@@ -158,10 +132,10 @@ function SRMC_gradient_full(J,A,N_MC,step)
     for k in 1:N_MC
 
         sample, R_set = Mono_Metropolis_sweep_left(sample, A, L_set)
-        sample, L_set = Mono_Metropolis_sweep_right(sample, A, R_set)
-        sample, R_set = Mono_Metropolis_sweep_left(sample, A, L_set)
-        #sample, L_set = Mono_Metropolis_sweep_right(sample, A, R_set)
-        #sample, R_set = Mono_Metropolis_sweep_left(sample, A, L_set)
+        for n in N_sweeps
+            sample, L_set = Mono_Metropolis_sweep_right(sample, A, R_set)
+            sample, R_set = Mono_Metropolis_sweep_left(sample, A, L_set)
+        end
         ρ_sample = tr(R_set[N+1])
         L_set = Vector{Matrix{ComplexF64}}()
         L=Matrix{ComplexF64}(I, χ, χ)
@@ -189,7 +163,7 @@ function SRMC_gradient_full(J,A,N_MC,step)
 
                     micro_L_set = L_MPO_strings(micro_sample, A)
                     micro_R_set = R_MPO_strings(micro_sample, A)
-                    local_∇L+= loc*derv_MPO(micro_sample,A,micro_L_set,micro_R_set)
+                    local_∇L+= loc*derv_MPO(micro_sample,micro_L_set,micro_R_set)
                 end
             end
 
@@ -201,13 +175,12 @@ function SRMC_gradient_full(J,A,N_MC,step)
             #Update L_set:
             L*=A[:,:,dINDEX[(sample.ket[j],sample.bra[j])]]
             push!(L_set,copy(L))
-
         end
 
         local_L /=ρ_sample
         local_∇L/=ρ_sample
 
-        Δ_MPO_sample = derv_MPO(sample,A,L_set,R_set)/ρ_sample
+        Δ_MPO_sample = derv_MPO(sample,L_set,R_set)/ρ_sample
 
         #Add in interaction terms:
         local_L +=l_int
@@ -224,64 +197,29 @@ function SRMC_gradient_full(J,A,N_MC,step)
 
         #Metric tensor:
         G = Δ_MPO_sample
-        Left += conj(G)
+        Left += conj(G) #change order of conjugation, but it shouldn't matter
         Right+= G
-        #for s in 1:4
-        #    for j in 1:χ
-        #        for i in 1:χ
-        #            G[i,j,s] = derv_MPS(i, j, (-1)^(s-1), sigma, A)
-        #            L[i,j,s]+= conj(G[i,j,s])
-        #            R[i,j,s]+= G[i,j,s]
-        #        end
-        #    end
-        #end
-        for s in 1:4
-            for j in 1:χ
-                for i in 1:χ
-                    for ss in 1:4
-                        for jj in 1:χ
-                            for ii in 1:χ
-                                S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(G[i,j,s])*G[ii,jj,ss]
-                            end
-                        end
-                    end
-                end
-            end
+        for s in 1:4, j in 1:χ, i in 1:χ, ss in 1:4, jj in 1:χ, ii in 1:χ
+            S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(G[i,j,s])*G[ii,jj,ss]
         end
     end
     mean_local_Lindbladian/=N_MC
     ΔLL*=mean_local_Lindbladian
 
-
     #Metric tensor:
     S./=N_MC
     Left./=N_MC
     Right./=N_MC
-    for s in 1:4
-        for j in 1:χ
-            for i in 1:χ
-                for ss in 1:4
-                    for jj in 1:χ
-                        for ii in 1:χ
-                            S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
-                        end
-                    end
-                end
-            end
-        end
+    for s in 1:4, j in 1:χ, i in 1:χ, ss in 1:4, jj in 1:χ, ii in 1:χ
+        S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
     end
 
-    #display(S)
-
-    S+=max(0.001,0.98^step)*Matrix{Int}(I, χ*χ*4, χ*χ*4)
-    #S+=0.01*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    S+=max(0.001,1*0.99^step)*Matrix{Int}(I, χ*χ*4, χ*χ*4)
 
     grad = (L∇L-ΔLL)/N_MC
     flat_grad = reshape(grad,4*χ^2)
     flat_grad = inv(S)*flat_grad
     grad = reshape(flat_grad,χ,χ,4)
-
-    #display(inv(S))
 
     return grad, real(mean_local_Lindbladian)
 end

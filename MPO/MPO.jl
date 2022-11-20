@@ -18,7 +18,7 @@ function MPO_string(sample,A,l,r)
 end
 
 #Left strings of MPOs:
-function L_MPO_strings(sample, A) # BEWARE OF NUMBERING
+function L_MPO_strings(sample, A)
     L = Vector{Matrix{ComplexF64}}()
     MPO=Matrix{ComplexF64}(I, χ, χ)
     push!(L,copy(MPO))
@@ -31,7 +31,7 @@ function L_MPO_strings(sample, A) # BEWARE OF NUMBERING
 end
 
 #Right strings of MPOs:
-function R_MPO_strings(sample, A) # BEWARE OF NUMBERING
+function R_MPO_strings(sample, A)
     R = Vector{Matrix{ComplexF64}}()
     MPO=Matrix{ComplexF64}(I, χ, χ)
     push!(R,copy(MPO))
@@ -39,6 +39,7 @@ function R_MPO_strings(sample, A) # BEWARE OF NUMBERING
         MPO=A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*MPO
 
         # MATRIX MULTIPLICATION IS NOT COMMUTATIVE, IDIOT
+
         #MPO*=A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
         #MPO*=A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample.bra[i]]]
         push!(R,copy(MPO))
@@ -59,7 +60,7 @@ function B_list(m, sample, A) #FIX m ORDERING
     return B_list
 end
 
-function derv_MPO(sample, A, L_set, R_set)
+function derv_MPO(sample, L_set, R_set)
     ∇=zeros(ComplexF64, χ,χ,4)
     #L_set = L_MPO_strings(sample, A)
     #R_set = R_MPO_strings(sample, A)
@@ -73,24 +74,6 @@ function derv_MPO(sample, A, L_set, R_set)
         end
     end
     return ∇
-end
-
-function OLDderv_MPO(sample, A)
-    ∇=zeros(ComplexF64, χ,χ,4)
-    for m::UInt8 in 1:N
-        B = prod(B_list(m, sample, A))
-        for i in 1:χ
-            for j in 1:χ
-                ∇[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += B[i,j] + B[j,i]
-            end
-            ∇[i,i,:]./=2
-        end
-    end
-    return ∇
-end
-
-function Δ_MPO(sample, A)
-    return derv_MPO(sample, A)/MPO(sample, A)
 end
 
 function double_bond_dimension(A)

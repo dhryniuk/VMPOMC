@@ -1,4 +1,3 @@
-#export density_matrix
 
 #Useful dictionaries:
 dREVINDEX = Dict(1 => (1,1), 2 => (1,0), 3 => (0,1), 4 => (0,0))
@@ -8,7 +7,7 @@ dUNVEC = Dict([1,0,0,0] => (1,1), [0,1,0,0] => (1,0), [0,0,1,0] => (0,1), [0,0,0
 TPSC = [(1,1),(1,0),(0,1),(0,0)]
 dINDEX2 = Dict(1 => 1, 0 => 2)
 
-mutable struct density_matrix
+mutable struct density_matrix#{Coeff<:Int64, Vec<:Vector{Float64}}
     coeff::ComplexF64
     ket::Vector{Int8}
     bra::Vector{Int8}
@@ -33,4 +32,13 @@ function draw3(n)
         c = rand(1:n)
     end
     return a, b, c
+end
+
+function adaptive_step_size(δ, current_L, previous_L)
+    if current_L>previous_L
+        δ=0.95*δ
+    else 
+        δ=1.01*δ
+    end
+    return δ
 end
