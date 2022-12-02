@@ -36,7 +36,7 @@ function SR_calculate_gradient(J,A)
 
                 #1-local part:
                 s = dVEC[(sample.ket[j],sample.bra[j])]
-                bra_L = transpose(s)*l1
+                bra_L = transpose(s)*conj(l1)
                 for i in 1:4
                     loc = bra_L[i]
                     if loc!=0
@@ -55,7 +55,7 @@ function SR_calculate_gradient(J,A)
                 #2-local part:
                 l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,N)+1]-1)
                 l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,N)+1]-1)
-                l_int += -1.0im*J*(l_int_α-l_int_β)
+                l_int += 1.0im*J*(l_int_α-l_int_β)
 
                 #Update L_set:
                 L*=A[:,:,dINDEX[(sample.ket[j],sample.bra[j])]]
@@ -100,7 +100,7 @@ function SR_calculate_gradient(J,A)
         S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
     end
 
-    S+=+0.001*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    S+=+0.01*Matrix{Int}(I, χ*χ*4, χ*χ*4)
 
     grad = (L∇L-ΔLL)/Z
     flat_grad = reshape(grad,4*χ^2)
@@ -197,8 +197,8 @@ function SRMC_gradient_full(J,A,N_MC,N_sweeps,step)
 
         #Metric tensor:
         G = Δ_MPO_sample
-        Left += conj(G) #change order of conjugation, but it shouldn't matter
-        Right+= G
+        Left += G #change order of conjugation, but it shouldn't matter
+        Right+= conj(G)
         for s in 1:4, j in 1:χ, i in 1:χ, ss in 1:4, jj in 1:χ, ii in 1:χ
             S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(G[i,j,s])*G[ii,jj,ss]
         end
@@ -214,7 +214,8 @@ function SRMC_gradient_full(J,A,N_MC,N_sweeps,step)
         S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
     end
 
-    S+=max(0.001,1*0.99^step)*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    #S+=max(0.001,1*0.95^step)*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    S+=0.1*Matrix{Int}(I, χ*χ*4, χ*χ*4)
 
     grad = (L∇L-ΔLL)/N_MC
     flat_grad = reshape(grad,4*χ^2)

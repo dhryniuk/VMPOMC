@@ -51,7 +51,8 @@ function calculate_gradient(J,A)
 
                 #1-local part:
                 s = dVEC[(sample.ket[j],sample.bra[j])]
-                bra_L = transpose(s)*l1
+                #bra_L = transpose(s)*l1
+                bra_L = transpose(s)*conj(l1)
                 for i in 1:4
                     loc = bra_L[i]
                     if loc!=0
@@ -70,7 +71,8 @@ function calculate_gradient(J,A)
                 #2-local part:
                 l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,N)+1]-1)
                 l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,N)+1]-1)
-                l_int += -1.0im*J*(l_int_α-l_int_β)
+                #l_int += -1.0im*J*(l_int_α-l_int_β)
+                l_int += 1.0im*J*(l_int_α-l_int_β)
 
                 #Update L_set:
                 L*=A[:,:,dINDEX[(sample.ket[j],sample.bra[j])]]
@@ -87,9 +89,11 @@ function calculate_gradient(J,A)
             local_∇L+=l_int*Δ_MPO_sample
     
             L∇L+=p_sample*local_L*conj(local_∇L)
+            #L∇L+=p_sample*conj(local_L)*local_∇L
     
             #ΔLL:
             local_Δ=p_sample*conj(Δ_MPO_sample)
+            #local_Δ=p_sample*Δ_MPO_sample
             ΔLL+=local_Δ
     
             #Mean local Lindbladian:
