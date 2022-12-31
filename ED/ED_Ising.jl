@@ -1,4 +1,5 @@
 #using Combinatorics
+export generate_bit_basis_reversed
 
 
 #Ising bit-basis:

@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 #SR = np.load("MPOMC_L_SR_χ=2.npy")
 #SGD = np.load("MPOMC_L_SGD_χ=2.npy")
 
-SGD = np.load("results_for_SR/MPOMC_L_SGD_χ=4.npy")
-SR = np.load("results_for_SR/MPOMC_L_SR_χ=4.npy")
+SGD = np.load("data/MPOMC_L_SGD_χ=4.npy")
+SR = np.load("data/MPOMC_L_SR_χ=4.npy")
 
 
 plt.figure(figsize=(6,3),dpi=600)

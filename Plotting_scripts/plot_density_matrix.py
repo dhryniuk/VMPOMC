@@ -1,11 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-rho_real = np.load("rho_real.npy")
-rho_imag = np.load("rho_imag.npy")
+rho_real = np.load("data/rho_real.npy")
+rho_imag = np.load("data/rho_imag.npy")
 
-MPOMC_rho_real = np.load("MPOMC_rho_real_χ=4.npy")
-MPOMC_rho_imag = np.load("MPOMC_rho_imag_χ=4.npy")
+MPOMC_rho_real = np.load("data/MPOMC_rho_real_χ=4.npy")
+MPOMC_rho_imag = np.load("data/MPOMC_rho_imag_χ=4.npy")
 
 print(rho_real)
 print(rho_imag)
@@ -21,7 +21,7 @@ im3 = ax3.imshow(rho_real)
 im4 = ax4.imshow(rho_imag)
 
 # Show all ticks and label them with the respective list entries
-N=2
+N=4
 ax.set_xticks(range(N**2))
 ax.set_yticks(range(N**2))
 ax2.set_xticks(range(N**2))
