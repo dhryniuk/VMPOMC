@@ -223,28 +223,32 @@ function SR_calculate_MC_gradient_full(params::parameters, A::Array{ComplexF64},
 
     grad = (L∇L-ΔLL)/N_MC
     flat_grad = reshape(grad,4*params.χ^2)
-    flat_grad = inv(conj.(S))*flat_grad
+    """
+    SHOULD S REALLY BE CONJUGATED?
+    """
+    flat_grad = inv(S)*flat_grad
+    #flat_grad = inv(conj.(S))*flat_grad
     grad = reshape(flat_grad,params.χ,params.χ,4)
 
     return grad, real(mean_local_Lindbladian)
 end
 
 function multi_threaded_SR_calculate_MC_gradient_full(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64}, N_MC::Int64, N_sweeps::Int64, ϵ::Float64)
-    tL∇L = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:2*Threads.nthreads()]
-    tΔLL = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:2*Threads.nthreads()]
+    tL∇L = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:Threads.nthreads()]
+    tΔLL = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:Threads.nthreads()]
 
-    tmean_local_Lindbladian = [0.0+0.0im for _ in 1:2*Threads.nthreads()]
+    tmean_local_Lindbladian = [0.0+0.0im for _ in 1:Threads.nthreads()]
 
     # Metric tensor auxiliary arrays for each individual thread:
-    tS = [zeros(ComplexF64,4*params.χ^2,4*params.χ^2) for _ in 1:2*Threads.nthreads()]
+    tS = [zeros(ComplexF64,4*params.χ^2,4*params.χ^2) for _ in 1:Threads.nthreads()]
     #G = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:2*Threads.nthreads()]
-    tLeft  = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:2*Threads.nthreads()]
-    tRight = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:2*Threads.nthreads()]
+    tLeft  = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:Threads.nthreads()]
+    tRight = [zeros(ComplexF64,params.χ,params.χ,4) for _ in 1:Threads.nthreads()]
     function flatten_index(i,j,s)
         return i+params.χ*(j-1)+params.χ^2*(s-1)
     end
 
-    Threads.@threads for t in 1:(2*Threads.nthreads())
+    Threads.@threads for t in 1:(Threads.nthreads())
         sample = density_matrix(1,rand(0:1,params.N),rand(0:1,params.N))
         L_set = L_MPO_strings(params, sample, A)
         for k in 1:N_MC
@@ -324,15 +328,15 @@ function multi_threaded_SR_calculate_MC_gradient_full(params::parameters, A::Arr
     end
     #mean_local_Lindbladian/=N_MC
     #ΔLL*=mean_local_Lindbladian
-    mean_local_Lindbladian = sum(tmean_local_Lindbladian)/(2*Threads.nthreads()*N_MC)
-    ΔLL = sum(tΔLL)/(2*Threads.nthreads())
+    mean_local_Lindbladian = sum(tmean_local_Lindbladian)/(Threads.nthreads()*N_MC)
+    ΔLL = sum(tΔLL)/(Threads.nthreads())
     ΔLL*=mean_local_Lindbladian
-    L∇L = sum(tL∇L)/(2*Threads.nthreads())
+    L∇L = sum(tL∇L)/(Threads.nthreads())
 
     #Metric tensor:
-    S = sum(tS)/(2*Threads.nthreads()*N_MC)
-    Left = sum(tLeft)/(2*Threads.nthreads()*N_MC)
-    Right= sum(tRight)/(2*Threads.nthreads()*N_MC)
+    S = sum(tS)/(Threads.nthreads()*N_MC)
+    Left = sum(tLeft)/(Threads.nthreads()*N_MC)
+    Right= sum(tRight)/(Threads.nthreads()*N_MC)
 
     #S./=N_MC
     #Left./=N_MC

@@ -3,8 +3,10 @@ using .MPOMC
 using NPZ
 using Plots
 using LinearAlgebra
-using Distributions
-using Revise
+#using Distributions
+#using Revise
+import Random
+Random.seed!(2)
 
 #Define constants:
 const J=0.25 #interaction strength
@@ -24,6 +26,7 @@ const basis=generate_bit_basis_reversed(N)
 
 
 A_init=rand(ComplexF64, χ,χ,2,2)
+display(A_init)
 A=copy(A_init)
 A=reshape(A,χ,χ,4)
 B=deepcopy(A)
@@ -37,27 +40,43 @@ old_LB=1
 δ = 0.02
 δB = 0.02
 
-Levy_dist = truncated(Levy(1.0, 0.001),0,10)
+#Levy_dist = truncated(Levy(1.0, 0.001),0,10)
 N_MC=2
 Q=1
 QB=1
-F=0.99
-ϵ=0.3
+F=0.98
+ϵ=0.1
+
+
+
+
+
+"""
+∇B,LB=calculate_MC_gradient_full(MPOMC.params,A,l1,100,2) 
+display(LB)
+∇B./=maximum(abs.(∇B))
+display(∇B)
+#A./=normalize_MPO(MPOMC.params,A)
+#display(A)
+error()
+"""
+
+
+
 
 @time begin
-    for k in 1:300
+    for k in 1:200
         L=0;LB=0
-        for i in 1:10
+        for i in 1:20
 
             new_A=zeros(ComplexF64, χ,χ,4)
             #∇,L=SR_calculate_gradient(MPOMC.params,A,l1,ϵ,basis)
-            #∇,L=SR_calculate_MC_gradient_full(MPOMC.params,A,l1,100,2,ϵ) 
+            ∇,L=SR_calculate_MC_gradient_full(MPOMC.params,A,l1,200,2,ϵ) 
             #∇,L=calculate_MC_gradient_full(MPOMC.params,A,l1,10,2) 
-            ∇,L=MT_SGD_MC_grad(MPOMC.params,A,l1,20,2) 
-            #∇,L=calculate_MC_gradient("SR",MPOMC.params,A,l1,N_MC+5*k,2,ϵ) 
+            #∇,L=MT_SGD_MC_grad(MPOMC.params,A,l1,20,2) 
             ∇./=maximum(abs.(∇))
             #global δ = adaptive_step_size(δ,L,old_L)
-            new_A = A - 1.0*δ*F^k*∇#.*(1+0.5*rand())
+            new_A = A - 2.0*δ*F^k*∇#.*(1+0.5*rand())
             #new_A = A - 2.0*δ*F^(k)*sign.(∇)*(1+rand())
             #global δ = adaptive_step_size(δ,L,old_L)*rand(Levy_dist)
             #global δ = δ*min(1,sqrt(L))*F^k
@@ -72,11 +91,13 @@ F=0.99
 
             new_B=zeros(ComplexF64, χ,χ,4)
             #∇B,LB=calculate_gradient(MPOMC.params,B,l1,basis)
-            #∇B,LB=calculate_MC_gradient("SGD",MPOMC.params,B,l1,N_MC+5*k,2,ϵ) 
-            #∇B,LB=calculate_MC_gradient_full(MPOMC.params,B,l1,100,2) 
+            ∇B,LB=calculate_MC_gradient_full(MPOMC.params,B,l1,200,2) 
             #∇B,LB=SR_calculate_MC_gradient_full(MPOMC.params,B,l1,1,50,ϵ) 
-            ∇B,LB=multi_threaded_SR_calculate_MC_gradient_full(MPOMC.params,B,l1,20,2,ϵ) 
+            #∇B,LB=multi_threaded_SR_calculate_MC_gradient_full(MPOMC.params,B,l1,20,2,ϵ) 
             ∇B./=maximum(abs.(∇B))
+
+            #println(L)
+            #display(∇[:, :, 1])
             #global δB = adaptive_step_size(δB,LB,old_LB)*rand(Levy_dist)
             #global δB = δB*min(1,sqrt(LB))*F^k
             #new_B = B - δB*∇B#.*(1+0.5*rand())#*(1+rand())#.*(1+0.1*rand())
@@ -86,6 +107,8 @@ F=0.99
             new_B = B - 1.0*δB*F^k*∇B#.*(1+0.5*rand())
             global B = new_B
             global B./=normalize_MPO(MPOMC.params, B)
+
+            #println("k=$k: ", real(L), " ; ", real(LB))
 
             #global QB=sqrt(calculate_mean_local_Lindbladian(J,B))
         end

@@ -1,4 +1,4 @@
-export calculate_gradient, calculate_MC_gradient_full, LdagL_gradient, MT_SGD_MC_grad
+export calculate_gradient, calculate_MC_gradient_full, LdagL_gradient, MT_SGD_MC_grad, calculate_MPS_gradient, SGD_MC_grad_distributed
 
 function B_list(m, sample, A) #FIX m ORDERING
     B_list=Matrix{ComplexF64}[Matrix{Int}(I, χ, χ)]
@@ -22,7 +22,7 @@ function OLDderv_MPO(sample, A)
     return ∇
 end
 
-function calculate_gradient(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64},basis)
+function calculate_gradient(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64}, basis)
     L∇L=zeros(ComplexF64,params.χ,params.χ,4)
     ΔLL=zeros(ComplexF64,params.χ,params.χ,4)
     Z=0
@@ -103,6 +103,78 @@ function calculate_gradient(params::parameters, A::Array{ComplexF64}, l1::Matrix
     mean_local_Lindbladian/=Z
     ΔLL*=mean_local_Lindbladian
     return (L∇L-ΔLL)/Z, real(mean_local_Lindbladian)
+end
+
+function calculate_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis)
+    L∇L=zeros(ComplexF64,params.χ,params.χ,2) #coupled product
+    ΔLL=zeros(ComplexF64,params.χ,params.χ,2) #uncoupled product
+    Z=0
+
+    mean_local_Hamiltonian = 0
+
+    l1 = params.h*sx
+
+    for k in 1:params.dim
+        sample = basis[k]
+        L_set = L_MPS_strings(params, sample, A)
+        R_set = R_MPS_strings(params, sample, A)
+        ρ_sample = tr(L_set[params.N+1])
+        p_sample = ρ_sample*conj(ρ_sample)
+        Z+=p_sample
+
+        local_E=0
+        local_∇L=zeros(ComplexF64, params.χ, params.χ, 2)
+
+        L_set = Vector{Matrix{ComplexF64}}()
+        L=Matrix{ComplexF64}(I, params.χ, params.χ)
+        push!(L_set,copy(L))
+
+        e_field=0
+        e_int=0
+        #L∇L*:
+        for j in 1:params.N
+
+            #1-local part (field):
+            s = dVEC2[sample[j]]
+            bra_L = transpose(s)*l1
+            for i in 1:2
+                loc = bra_L[i]
+                if loc!=0
+                    state = TPSC2[i]
+                    e_field -= loc*tr(L_set[j]*A[:,:,dINDEX2[state]]*R_set[params.N+1-j])
+                end
+            end
+
+            #Interaction term:
+            e_int -= sample[j]*sample[mod(j,params.N)+1]
+
+            #Update L_set:
+            L*=A[:,:,dINDEX2[sample[j]]]
+            push!(L_set,copy(L))
+        end
+
+        #local_L /=ρ_sample
+        #local_∇L/=ρ_sample
+
+        Δ_MPO_sample = derv_MPS(params, sample, L_set, R_set)/ρ_sample
+
+        #Add in interaction terms:
+        local_E  = e_int+e_field
+        local_∇E = (e_int+e_field)*Δ_MPO_sample
+        L∇L += p_sample*local_∇E # conj?
+
+        #ΔLL:
+        local_Δ = p_sample*Δ_MPO_sample
+        #local_Δ=p_sample*Δ_MPO_sample
+        ΔLL += local_Δ
+
+        #Mean local Lindbladian:
+        mean_local_Hamiltonian += p_sample*local_E
+    end
+
+    mean_local_Hamiltonian/=Z
+    ΔLL*=mean_local_Hamiltonian
+    return (L∇L-ΔLL)/Z, real(mean_local_Hamiltonian)
 end
 
 function calculate_MC_gradient_partial(J,A,N_MC)
@@ -202,7 +274,6 @@ function calculate_MC_gradient_full(params::parameters, A::Array{ComplexF64}, l1
 
     sample = density_matrix(1,ones(params.N),ones(params.N))
     L_set = L_MPO_strings(params, sample, A)
-
     for k in 1:N_MC
 
         sample, R_set = Mono_Metropolis_sweep_left(params, sample, A, L_set)
@@ -272,20 +343,30 @@ function calculate_MC_gradient_full(params::parameters, A::Array{ComplexF64}, l1
     end
     mean_local_Lindbladian/=N_MC
     ΔLL*=mean_local_Lindbladian
-    return (L∇L-ΔLL)/N_MC, real(mean_local_Lindbladian)
+    return [ (L∇L-ΔLL)/N_MC, real(mean_local_Lindbladian) ]
 end
 
+#TRY DISTRIBUTED VERSION
 function MT_SGD_MC_grad(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64}, N_MC::Int64, N_sweeps::Int64)
-    grad = [Array{ComplexF64}(undef,params.χ,params.χ,4) for _ in 1:2*Threads.nthreads()]
-    mean_local_Lindbladian = [0.0 for _ in 1:2*Threads.nthreads()]
-    Threads.@threads for t in 1:(2*Threads.nthreads())
+    grad = [Array{ComplexF64}(undef,params.χ,params.χ,4) for _ in 1:Threads.nthreads()]
+    mean_local_Lindbladian = [0.0 for _ in 1:Threads.nthreads()]
+    Threads.@threads for t in 1:(Threads.nthreads())
         g,m=calculate_MC_gradient_full(params, A, l1, N_MC, N_sweeps)
         grad[t]=g
         mean_local_Lindbladian[t]=m
         #grad[t], mean_local_Lindbladian[t] = SR_calculate_MC_gradient_full(params, A, l1, N_MC, N_sweeps, ϵ)
     end
     #display(mean_local_Lindbladian)
-    return sum(grad)/(2*Threads.nthreads()), sum(mean_local_Lindbladian)/(2*Threads.nthreads())
+    return sum(grad)/(Threads.nthreads()), sum(mean_local_Lindbladian)/(Threads.nthreads())
+end
+
+function SGD_MC_grad_distributed(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64}, N_MC::Int64, N_sweeps::Int64)
+    output = @distributed (+) for i=1:nworkers()
+        calculate_MC_gradient_full(params, A, l1, N_MC, N_sweeps)
+    end
+    output/=nworkers()
+    return output[1], output[2]
+    #return grad/nworkers(), mean_local_Lindbladian/nworkers()
 end
 
 function LdagL_gradient(params,A,l1,basis) #CHECK IF COMPLEX CONJUGATE AND TRANSPOSES ARE TAKEN CORRECTLY!!!

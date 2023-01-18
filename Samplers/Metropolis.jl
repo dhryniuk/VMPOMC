@@ -50,6 +50,7 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::density_matrix, 
     end
 
     R_set = Vector{Matrix{ComplexF64}}(undef,0)
+    #R_set = []
     R = Matrix{ComplexF64}(I, params.χ, params.χ)
     push!(R_set, copy(R))
     C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
@@ -99,7 +100,9 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix,
         P = tr(L_set[i]*A[:,:,v]*R_set[params.N+1-i])
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         if rand() <= metropolis_prob
-            sample = sample_p
+            #sample = sample_p
+            sample.ket = deepcopy(sample_p.ket)
+            sample.bra = deepcopy(sample_p.bra)
         end
 
         L*= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]

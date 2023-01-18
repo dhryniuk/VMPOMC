@@ -21,7 +21,7 @@ im3 = ax3.imshow(rho_real)
 im4 = ax4.imshow(rho_imag)
 
 # Show all ticks and label them with the respective list entries
-N=4
+N=3
 ax.set_xticks(range(N**2))
 ax.set_yticks(range(N**2))
 ax2.set_xticks(range(N**2))

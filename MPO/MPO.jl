@@ -1,4 +1,7 @@
-export normalize_MPO, calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization
+export normalize_MPO, normalize_MPS, calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization
+
+#temporary:
+export L_MPO_strings, density_matrix
 
 mutable struct parameters
     N::Int
@@ -120,4 +123,79 @@ function calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
     end
     mp*=-A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
     return tr(mp)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function MPS(params::parameters, sample::Array, A::Array{ComplexF64})
+    MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
+    for i in 1:params.N
+        MPS*=A[:,:,dINDEX2[sample[i]]]
+    end
+    return tr(MPS)::ComplexF64
+end
+
+#Left strings of MPOs:
+function L_MPS_strings(params::parameters, sample::Array, A::Array{ComplexF64})
+    L = Vector{Matrix{ComplexF64}}()
+    MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
+    push!(L,copy(MPS))
+    for i::UInt8 in 1:params.N
+        MPS*=A[:,:,dINDEX2[sample[i]]]
+        push!(L,copy(MPS))
+    end
+    return L
+end
+
+#Right strings of MPOs:
+function R_MPS_strings(params::parameters, sample::Array, A::Array{ComplexF64})
+    R = Vector{Matrix{ComplexF64}}()
+    MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
+    push!(R,copy(MPS))
+    for i::UInt8 in params.N:-1:1
+        MPS=A[:,:,dINDEX2[sample[i]]]*MPS
+        # MATRIX MULTIPLICATION IS NOT COMMUTATIVE, IDIOT
+        push!(R,copy(MPS))
+    end
+    return R
+end
+
+function derv_MPS(params::parameters, sample::Array, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+    ∇=zeros(ComplexF64, params.χ, params.χ,2)
+    #L_set = L_MPO_strings(sample, A)
+    #R_set = R_MPO_strings(sample, A)
+    for m::UInt8 in 1:params.N
+        B = R_set[params.N+1-m]*L_set[m]
+        for i in 1:params.χ
+            for j in 1:params.χ
+                ∇[i,j,dINDEX2[sample[m]]] += B[i,j] + B[j,i]
+            end
+            ∇[i,i,:]./=2
+        end
+    end
+    return ∇
+end
+
+function normalize_MPS(params::parameters, A::Array{ComplexF64})
+    MPS=(A[:,:,dINDEX2[1]]+A[:,:,dINDEX2[0]])^params.N
+    return tr(MPS)^(1/params.N)#::ComplexF64
 end

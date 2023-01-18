@@ -1,6 +1,6 @@
 #using LinearAlgebra
 #using NPZ
-export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm, DQIM, own_version_DQIM, own_z_magnetization, own_x_magnetization, construct_vec_density_matrix_basis
+export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm, DQIM, own_version_DQIM, own_z_magnetization, own_x_magnetization, construct_vec_density_matrix_basis, ED_z_magnetization, ED_x_magnetization
 
 id = [1 0; 0 1]
 sx = [0 1; 1 0]
@@ -197,7 +197,7 @@ function own_z_magnetization(ρ,params,basis)
     return M_z/params.N
 end
 
-function calculate_magnetization(ρ,N)
+function ED_x_magnetization(ρ,N)
     first_term_ops = fill(id, N)
     first_term_ops[1] = sx
 
@@ -208,7 +208,21 @@ function calculate_magnetization(ρ,N)
     end
     #m_z/=N
 
-    return m_z
+    return m_z/N
+end
+
+function ED_z_magnetization(ρ,N)
+    first_term_ops = fill(id, N)
+    first_term_ops[1] = sz
+
+    m_z::ComplexF64=0
+    for i in 1:N
+        m_z += tr(ρ*foldl(⊗, first_term_ops))
+        first_term_ops = circshift(first_term_ops,1)
+    end
+    #m_z/=N
+
+    return m_z/N
 end
 
 function own_x_magnetization(ρ,params,basis)
