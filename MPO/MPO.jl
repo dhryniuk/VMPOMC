@@ -1,7 +1,7 @@
-export normalize_MPO, normalize_MPS, calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization
+export normalize_MPO, normalize_MPS, calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization, double_bond_dimension
 
 #temporary:
-export L_MPO_strings, density_matrix
+export L_MPO_strings, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 mutable struct parameters
     N::Int
@@ -113,7 +113,7 @@ function calculate_y_magnetization(params::parameters, A::Array{ComplexF64})
         mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
     end
     mp*=(A[:,:,dINDEX[(1,0)]]-A[:,:,dINDEX[(0,1)]])*1im
-    return tr(mp)
+    return -tr(mp)
 end
 
 function calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
@@ -125,9 +125,64 @@ function calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
     return tr(mp)
 end
 
+function double_bond_dimension(params::parameters, A::Array{ComplexF64})
+    params.χ*=2
+    new_A = Array{ComplexF64}(undef, params.χ,params.χ,4)#2,2)
+    for i in 1:4
+        new_A[:,:,i] = kron(A[:,:,i], [1 0.9;0.9 1])
+    end
+    #for i in 1:2
+    #    for j in 1:2
+    #        new_A[:,:,i,j] = kron(A[:,:,i,j], [1 1;1 1])
+    #    end
+    #end
+    new_A./=normalize_MPO(MPOMC.params, new_A)
+    return new_A
+end
 
+function calculate_purity(params::parameters, A::Array{ComplexF64})
+    p = Matrix{Int}(I, params.χ, params.χ)
+    for _ in 1:params.N
+        p *= ( ct(A[:,:,dINDEX[(1,1)]])*A[:,:,dINDEX[(1,1)]] 
+        + ct(A[:,:,dINDEX[(0,0)]])*A[:,:,dINDEX[(0,0)]] 
+        + ct(A[:,:,dINDEX[(0,1)]])*A[:,:,dINDEX[(1,0)]] 
+        + ct(A[:,:,dINDEX[(1,0)]])*A[:,:,dINDEX[(0,1)]] )
+    end
+    return tr(p)
+end
 
+function calculate_Renyi_entropy(params::parameters, A::Array{ComplexF64})
+    return -log2(calculate_purity(params, A))
+end
 
+function tensor_purity(params::parameters, A::Array{ComplexF64})
+    A=reshape(A,params.χ,params.χ,2,2)
+    B=rand(ComplexF64,params.χ,params.χ,params.χ,params.χ)
+    @tensor B[a,b,u,v] = A[a,b,f,e]*A[u,v,e,f]#conj(A[a,b,e,f])*A[u,v,e,f]
+    C=deepcopy(B)
+    for _ in 1:params.N-1
+        @tensor C[a,b,u,v] = C[a,c,u,d]*B[c,b,d,v]
+        #B=C
+    end
+    return @tensor C[a,a,u,u]
+    #return tensortrace(B,(1,1,2,2))[1]*params.N
+end
+
+### N=2 ONLY!
+function tp(A::Array{ComplexF64})
+    A=reshape(A,MPOMC.params.χ,MPOMC.params.χ,2,2)
+    B=rand(ComplexF64,2,2,2,2)
+    @tensor B[a,b,u,v] = A[e,f,a,b]*A[f,e,u,v]
+    return @tensor B[a,b,u,v]*B[b,a,v,u]
+end
+
+function tp_across_3(A::Array{ComplexF64})
+    A=reshape(A,MPOMC.params.χ,MPOMC.params.χ,2,2)    
+    B=rand(ComplexF64,MPOMC.params.χ,MPOMC.params.χ,MPOMC.params.χ,MPOMC.params.χ)
+    @tensor B[a,b,u,v] = A[a,b,f,e]*A[u,v,e,f]
+    #return @tensor B[a,b,u,v]*B[b,a,v,u] #N=2
+    return @tensor B[a,c,u,d]*B[c,b,d,v]*B[b,a,v,u] #N=3
+end
 
 
 

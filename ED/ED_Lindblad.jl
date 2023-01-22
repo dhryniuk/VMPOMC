@@ -1,11 +1,12 @@
 #using LinearAlgebra
 #using NPZ
-export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm, DQIM, own_version_DQIM, own_z_magnetization, own_x_magnetization, construct_vec_density_matrix_basis, ED_z_magnetization, ED_x_magnetization
+export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm, DQIM, own_version_DQIM, own_z_magnetization, own_x_magnetization, construct_vec_density_matrix_basis, ED_z_magnetization, ED_x_magnetization, calculate_purity, calculate_Renyi_entropy
+export ED_magnetization
 
-id = [1 0; 0 1]
-sx = [0 1; 1 0]
-sy = [0 -1im; 1im 0]
-sz = [1 0; 0 -1]
+id = [1.0+0.0im 0.0+0.0im; 0.0+0.0im 1.0+0.0im]
+sx = [0.0+0.0im 1.0+0.0im; 1.0+0.0im 0.0+0.0im]
+sy = [0.0+0.0im 0.0-1im; 0.0+1im 0.0+0.0im]
+sz = [1.0+0.0im 0.0+0.0im; 0.0+0.0im -1.0+0.0im]
 sp = (sx+1im*sy)/2
 sm = (sx-1im*sy)/2
 
@@ -197,6 +198,24 @@ function own_z_magnetization(ρ,params,basis)
     return M_z/params.N
 end
 
+function ED_magnetization(s,ρ,N)
+    first_term_ops = fill(id, N)
+    first_term_ops[1] = s
+
+    m::ComplexF64=0
+    for _ in 1:N
+        m += tr(ρ*foldl(⊗, first_term_ops))
+        first_term_ops = circshift(first_term_ops,1)
+    end
+
+    return m/N
+end
+
+function ct(m)
+    return conj(transpose(m))
+end
+
+
 function ED_x_magnetization(ρ,N)
     first_term_ops = fill(id, N)
     first_term_ops[1] = sx
@@ -244,6 +263,14 @@ function own_x_magnetization(ρ,params,basis)
         end
     end
     return M_x/params.N
+end
+
+function calculate_purity(ρ)
+    return tr(conj(transpose(ρ))*ρ)
+end
+
+function calculate_Renyi_entropy(ρ)
+    return -log2(calculate_purity(ρ))
 end
 
 #N=4

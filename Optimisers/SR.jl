@@ -1,5 +1,8 @@
 export SR_calculate_gradient, SR_calculate_MC_gradient_full, SR_LdagL_gradient, MT_SR_MC_grad, multi_threaded_SR_calculate_MC_gradient_full
 
+#experimental:
+export distributed_SR_calculate_MC_gradient_full
+
 function SR_calculate_gradient(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64},ϵ,basis)
     #χ=size(A[:,:,1])[1]
 
@@ -228,6 +231,144 @@ function SR_calculate_MC_gradient_full(params::parameters, A::Array{ComplexF64},
     """
     flat_grad = inv(S)*flat_grad
     #flat_grad = inv(conj.(S))*flat_grad
+    grad = reshape(flat_grad,params.χ,params.χ,4)
+
+    return grad, real(mean_local_Lindbladian)
+end
+
+
+function sample_with_SR(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64}, N_MC::Int64, N_sweeps::Int64)
+    function flatten_index(i,j,s)
+        return i+params.χ*(j-1)+params.χ^2*(s-1)
+    end
+
+
+    #Initialize variables:
+    L∇L=zeros(ComplexF64,params.χ,params.χ,4)
+    ΔLL=zeros(ComplexF64,params.χ,params.χ,4)
+    mean_local_Lindbladian=0.0+0.0im
+    S=zeros(ComplexF64,4*params.χ^2,4*params.χ^2)
+    Left=zeros(ComplexF64,params.χ,params.χ,4)
+    Right=zeros(ComplexF64,params.χ,params.χ,4)
+
+
+    sample = density_matrix(1,rand(0:1,params.N),rand(0:1,params.N))
+    L_set = L_MPO_strings(params, sample, A)
+    for k in 1:N_MC
+
+        sample, R_set = Mono_Metropolis_sweep_left(params, sample, A, L_set)
+        for n in N_sweeps
+            sample, L_set = Mono_Metropolis_sweep_right(params, sample, A, R_set)
+            sample, R_set = Mono_Metropolis_sweep_left(params, sample, A, L_set)
+        end
+        ρ_sample = tr(R_set[params.N+1])
+        L_set = Vector{Matrix{ComplexF64}}()
+        L=Matrix{ComplexF64}(I, params.χ, params.χ)
+        push!(L_set,copy(L))
+
+        local_L=0
+        local_∇L=zeros(ComplexF64,params.χ,params.χ,4)
+        l_int = 0
+
+        #L∇L*:
+        for j in 1:params.N
+
+            #1-local part:
+            s = dVEC[(sample.ket[j],sample.bra[j])]
+            bra_L = transpose(s)*conj(l1)
+            for i in 1:4
+                loc = bra_L[i]
+                if loc!=0
+                    state = TPSC[i]
+                    local_L += loc*tr(L_set[j]*A[:,:,dINDEX[(state[1],state[2])]]*R_set[params.N+1-j])
+                    
+                    micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
+                    micro_sample.ket[j] = state[1]
+                    micro_sample.bra[j] = state[2]
+
+                    micro_L_set = L_MPO_strings(params, micro_sample, A)
+                    micro_R_set = R_MPO_strings(params, micro_sample, A)
+                    local_∇L+= loc*derv_MPO(params, micro_sample, micro_L_set, micro_R_set)
+                end
+            end
+
+            #2-local part:
+            l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,params.N)+1]-1)
+            l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,params.N)+1]-1)
+            l_int += 1.0im*params.J*(l_int_α-l_int_β)
+
+            #Update L_set:
+            L*=A[:,:,dINDEX[(sample.ket[j],sample.bra[j])]]
+            push!(L_set,copy(L))
+        end
+
+        local_L /=ρ_sample
+        local_∇L/=ρ_sample
+
+        Δ_MPO_sample = derv_MPO(params, sample, L_set, R_set)/ρ_sample
+
+        #Add in interaction terms:
+        local_L +=l_int
+        local_∇L+=l_int*Δ_MPO_sample
+
+        L∇L+=local_L*conj(local_∇L)
+
+        #ΔLL:
+        local_Δ=conj(Δ_MPO_sample)
+        ΔLL+=local_Δ
+
+        #Mean local Lindbladian:
+        mean_local_Lindbladian += local_L*conj(local_L)
+
+        #Metric tensor:
+        G = Δ_MPO_sample
+        Left += G #change order of conjugation, but it shouldn't matter
+        Right+= conj(G)
+        for s in 1:4, j in 1:params.χ, i in 1:params.χ, ss in 1:4, jj in 1:params.χ, ii in 1:params.χ
+            S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(G[i,j,s])*G[ii,jj,ss]
+        end
+    end
+    return [L∇L, ΔLL, mean_local_Lindbladian, S, Left, Right]
+end
+
+
+function distributed_SR_calculate_MC_gradient_full(params::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64}, N_MC::Int64, N_sweeps::Int64, ϵ::Float64)
+    #output = [L∇L, ΔLL, mean_local_Lindbladian, S, Left, Right]
+
+    #perform reduction:
+    output = @distributed (+) for i=1:nworkers()
+        sample_with_SR(params, A, l1, N_MC, N_sweeps)
+    end
+
+    L∇L=output[1]
+    ΔLL=output[2]
+    mean_local_Lindbladian=output[3]
+    S=output[4]
+    Left=output[5]
+    Right=output[6]
+
+    mean_local_Lindbladian/=(N_MC*nworkers())
+    ΔLL*=mean_local_Lindbladian
+
+    #Metric tensor:
+    S/=(N_MC*nworkers())
+    Left/=(N_MC*nworkers())
+    Right/=(N_MC*nworkers())
+
+    function flatten_index(i,j,s)
+        return i+params.χ*(j-1)+params.χ^2*(s-1)
+    end
+
+    for s in 1:4, j in 1:params.χ, i in 1:params.χ, ss in 1:4, jj in 1:params.χ, ii in 1:params.χ
+        S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
+    end
+
+    #S+=max(0.001,1*0.95^step)*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    S+=ϵ*Matrix{Int}(I, params.χ*params.χ*4, params.χ*params.χ*4)
+
+    grad = (L∇L-ΔLL)/(N_MC*nworkers())
+    flat_grad = reshape(grad,4*params.χ^2)
+    #flat_grad = inv(S)*flat_grad
     grad = reshape(flat_grad,params.χ,params.χ,4)
 
     return grad, real(mean_local_Lindbladian)
