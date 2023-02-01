@@ -1,7 +1,7 @@
 export normalize_MPO, normalize_MPS, calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization, double_bond_dimension
 
 #temporary:
-export L_MPO_strings, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
+export hermetize_MPO, increase_bond_dimension, L_MPO_strings, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 mutable struct parameters
     N::Int
@@ -10,6 +10,7 @@ mutable struct parameters
     J::Float64
     h::Float64
     γ::Float64
+    α::Int
 end
 
 mutable struct density_matrix#{Coeff<:Int64, Vec<:Vector{Float64}}
@@ -73,6 +74,16 @@ function normalize_MPO(params::parameters, A::Array{ComplexF64})
     return tr(MPO)^(1/params.N)#::ComplexF64
 end
 
+function hermetize_MPO(params::parameters, A::Array{ComplexF64})
+    A=reshape(A,params.χ,params.χ,2,2)
+    new_A = deepcopy(A)
+    new_A[:,:,1,2]=0.5*(A[:,:,1,2]+A[:,:,2,1])
+    new_A[:,:,2,1]=conj(new_A[:,:,1,2])
+    new_A[:,:,1,1]=real(new_A[:,:,1,1])
+    new_A[:,:,2,2]=real(new_A[:,:,2,2])
+    return reshape(new_A,params.χ,params.χ,4)#::ComplexF64
+end
+
 function B_list(m, sample::density_matrix, A::Array{ComplexF64}) #FIX m ORDERING
     B_list=Matrix{ComplexF64}[Matrix{Int}(I, χ, χ)]
     for j::UInt8 in 1:params.N-1
@@ -129,13 +140,27 @@ function double_bond_dimension(params::parameters, A::Array{ComplexF64})
     params.χ*=2
     new_A = Array{ComplexF64}(undef, params.χ,params.χ,4)#2,2)
     for i in 1:4
-        new_A[:,:,i] = kron(A[:,:,i], [1 0.9;0.9 1])
+        new_A[:,:,i] = kron(A[:,:,i], [1 0.99;0.99 1])
     end
     #for i in 1:2
     #    for j in 1:2
     #        new_A[:,:,i,j] = kron(A[:,:,i,j], [1 1;1 1])
     #    end
     #end
+    new_A./=normalize_MPO(MPOMC.params, new_A)
+    return new_A
+end
+
+function increase_bond_dimension(params::parameters, A::Array{ComplexF64}, step::Int)
+    params.χ+=step
+    new_A = 0.001*rand(ComplexF64,params.χ,params.χ,4)#2,2)
+    for i in 1:4
+        for j in 1:params.χ-step
+            for k in 1:params.χ-step
+                new_A[j,k,i] = A[j,k,i]
+            end
+        end
+    end
     new_A./=normalize_MPO(MPOMC.params, new_A)
     return new_A
 end

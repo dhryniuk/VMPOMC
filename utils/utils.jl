@@ -68,11 +68,12 @@ function make_density_matrix(params, A, basis)
     return ρ
 end
 
-function set_parameters(N,χ,J,h,γ)
+function set_parameters(N,χ,J,h,γ,α)
 	params.N = N
     params.dim = 2^N;
     params.χ = χ;
     params.J = J;
     params.h = h;
     params.γ = γ;
+    params.α = α;
 end

@@ -1,7 +1,11 @@
-#using LinearAlgebra
-#using NPZ
 export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm, DQIM, own_version_DQIM, own_z_magnetization, own_x_magnetization, construct_vec_density_matrix_basis, ED_z_magnetization, ED_x_magnetization, calculate_purity, calculate_Renyi_entropy
-export ED_magnetization
+export ED_magnetization, long_range_DQIM, sparse_DQIM, sparse_long_range_DQIM, eigen_sparse, von_Neumann_entropy
+
+function eigen_sparse(x)
+    decomp, history = partialschur(x, nev=1, which=LR()); # only solve for the ground state
+    vals, vecs = partialeigen(decomp);
+    return vals, vecs
+end
 
 id = [1.0+0.0im 0.0+0.0im; 0.0+0.0im 1.0+0.0im]
 sx = [0.0+0.0im 1.0+0.0im; 1.0+0.0im 0.0+0.0im]
@@ -11,6 +15,13 @@ sp = (sx+1im*sy)/2
 sm = (sx-1im*sy)/2
 
 ⊗(x,y) = kron(x,y)
+
+spid = sparse(id)
+spsx = sparse(sx)
+spsy = sparse(sy)
+spsz = sparse(sz)
+spsp = sparse(sp)
+spsm = sparse(sm)
 
 function make_one_body_Lindbladian(H, Γ)
     L_H = -1im*(H⊗id - id⊗transpose(H))
@@ -70,6 +81,8 @@ function DQIM(params)
         second_term_ops = circshift(second_term_ops,1)
     end
 
+    #display(H)
+
     Id = foldl(⊗, fill(id, params.N))
     L_H = -1im*(H⊗Id - Id⊗transpose(H))
 
@@ -79,6 +92,154 @@ function DQIM(params)
 
     L_D = zeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
     for i in 1:params.N
+        Γ = params.γ*foldl(⊗, dissip_term_ops)
+        dissip_term_ops = circshift(dissip_term_ops,1)
+        L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
+    end
+
+    return L_H + L_D
+end
+
+
+function sparse_DQIM(params)
+    # vector of operators: [σᶻ, σᶻ, id, ...]
+    first_term_ops = fill(spid, params.N)
+    if params.J!=0
+        first_term_ops[1] = spsz
+        first_term_ops[2] = spsz
+    end
+    
+    # vector of operators: [σˣ, id, ...]
+    second_term_ops = fill(spid, params.N)
+    second_term_ops[1] = spsx
+    
+    H = spzeros(ComplexF64, 2^params.N, 2^params.N)
+    for i in 1:params.N
+        H += params.J*foldl(⊗, first_term_ops)
+        first_term_ops = circshift(first_term_ops,1)
+    end
+    
+    for i in 1:params.N
+        H += params.h*foldl(⊗, second_term_ops)
+        second_term_ops = circshift(second_term_ops,1)
+    end
+
+    #display(H)
+
+    Id = foldl(⊗, fill(spid, params.N))
+    L_H = -1im*(H⊗Id - Id⊗transpose(H))
+
+    # vector of operators: [σ-, id, ...]
+    dissip_term_ops = fill(spid, params.N)
+    dissip_term_ops[1] = spsm
+
+    L_D = spzeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
+    for i in 1:params.N
+        Γ = params.γ*foldl(⊗, dissip_term_ops)
+        dissip_term_ops = circshift(dissip_term_ops,1)
+        L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
+    end
+
+    return L_H + L_D
+end
+
+
+
+function long_range_DQIM(params)
+    
+    H = zeros(ComplexF16, 2^params.N, 2^params.N)
+    # vector of operators: [σᶻ, σᶻ, id, ...]
+    for k in 1:convert(Int16,params.N/2)
+        first_term_ops = fill(id, params.N)
+        if params.J!=0
+            first_term_ops[1] = sz
+            first_term_ops[1+k] = sz
+        end
+        dist = k^params.α
+        if k!=params.N/2
+            for _ in 1:params.N
+                H += params.J/dist*foldl(⊗, first_term_ops)
+                first_term_ops = circshift(first_term_ops,1)
+            end
+        else
+            for _ in 1:params.N/2
+                H += params.J/dist*foldl(⊗, first_term_ops)
+                first_term_ops = circshift(first_term_ops,1)
+            end
+        end
+    end
+
+    # vector of operators: [σˣ, id, ...]
+    second_term_ops = fill(id, params.N)
+    second_term_ops[1] = sx
+    for _ in 1:params.N
+        H += params.h*foldl(⊗, second_term_ops)
+        second_term_ops = circshift(second_term_ops,1)
+    end
+
+    #display(H)
+
+    Id = foldl(⊗, fill(id, params.N))
+    L_H = -1im*(H⊗Id - Id⊗transpose(H))
+
+    # vector of operators: [σ-, id, ...]
+    dissip_term_ops = fill(id, params.N)
+    dissip_term_ops[1] = sm
+
+    L_D = zeros(ComplexF16, 2^(2*params.N), 2^(2*params.N))
+    for _ in 1:params.N
+        Γ = params.γ*foldl(⊗, dissip_term_ops)
+        dissip_term_ops = circshift(dissip_term_ops,1)
+        L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
+    end
+
+    return L_H + L_D
+end
+
+
+function sparse_long_range_DQIM(params)
+    
+    H = spzeros(ComplexF64, 2^params.N, 2^params.N)
+    # vector of operators: [σᶻ, σᶻ, id, ...]
+    for k in 1:convert(Int64,params.N/2)
+        first_term_ops = fill(spid, params.N)
+        if params.J!=0
+            first_term_ops[1] = spsz
+            first_term_ops[1+k] = spsz
+        end
+        dist = k^params.α
+        if k!=params.N/2
+            for _ in 1:params.N
+                H += params.J/dist*foldl(⊗, first_term_ops)
+                first_term_ops = circshift(first_term_ops,1)
+            end
+        else
+            for _ in 1:params.N/2
+                H += params.J/dist*foldl(⊗, first_term_ops)
+                first_term_ops = circshift(first_term_ops,1)
+            end
+        end
+    end
+
+    # vector of operators: [σˣ, id, ...]
+    second_term_ops = fill(spid, params.N)
+    second_term_ops[1] = spsx
+    for _ in 1:params.N
+        H += params.h*foldl(⊗, second_term_ops)
+        second_term_ops = circshift(second_term_ops,1)
+    end
+
+    #display(H)
+
+    Id = foldl(⊗, fill(spid, params.N))
+    L_H = -1im*(H⊗Id - Id⊗transpose(H))
+
+    # vector of operators: [σ-, id, ...]
+    dissip_term_ops = fill(spid, params.N)
+    dissip_term_ops[1] = spsm
+
+    L_D = spzeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
+    for _ in 1:params.N
         Γ = params.γ*foldl(⊗, dissip_term_ops)
         dissip_term_ops = circshift(dissip_term_ops,1)
         L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
@@ -271,6 +432,10 @@ end
 
 function calculate_Renyi_entropy(ρ)
     return -log2(calculate_purity(ρ))
+end
+
+function von_Neumann_entropy(ρ)
+    return -tr(ρ*log(ρ))
 end
 
 #N=4
