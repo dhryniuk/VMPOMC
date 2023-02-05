@@ -1,5 +1,6 @@
 #using Combinatorics
-export generate_bit_basis_reversed
+export generate_bit_basis_reversed, make_bit_Hamiltonian
+export generate_bit_basis
 
 
 #Ising bit-basis:

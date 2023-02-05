@@ -105,9 +105,9 @@ function calculate_gradient(params::parameters, A::Array{ComplexF64}, l1::Matrix
     return (L∇L-ΔLL)/Z, real(mean_local_Lindbladian)
 end
 
-function calculate_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis)
-    L∇L=zeros(ComplexF64,params.χ,params.χ,2) #coupled product
-    ΔLL=zeros(ComplexF64,params.χ,params.χ,2) #uncoupled product
+function calculate_MPS_gradient(params::parameters, A::Array{Float64}, basis)
+    L∇L=zeros(Float64,params.χ,params.χ,2) #coupled product
+    ΔLL=zeros(Float64,params.χ,params.χ,2) #uncoupled product
     Z=0
 
     mean_local_Hamiltonian = 0
@@ -116,21 +116,112 @@ function calculate_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis)
 
     for k in 1:params.dim
         sample = basis[k]
+        #println(sample)
         L_set = L_MPS_strings(params, sample, A)
         R_set = R_MPS_strings(params, sample, A)
         ρ_sample = tr(L_set[params.N+1])
+        #ρ_sample = MPS(params, sample, A)
         p_sample = ρ_sample*conj(ρ_sample)
         Z+=p_sample
 
         local_E=0
-        local_∇L=zeros(ComplexF64, params.χ, params.χ, 2)
+        local_∇L=zeros(Float64, params.χ, params.χ, 2)
 
-        L_set = Vector{Matrix{ComplexF64}}()
-        L=Matrix{ComplexF64}(I, params.χ, params.χ)
+        L_set = Vector{Matrix{Float64}}()
+        L=Matrix{Float64}(I, params.χ, params.χ)
         push!(L_set,copy(L))
 
         e_field=0
         e_int=0
+        #L∇L*:
+        for j in 1:params.N
+
+            #1-local part (field):
+            s = dVEC2[sample[j]]
+            bra_L = transpose(s)*l1
+            for i in 1:2
+                loc = bra_L[i]
+                if loc!=0
+                    state = TPSC2[i]
+                    #new_sample = deepcopy(sample)
+                    #new_sample[j] = state
+                    #e_field -= loc*MPS(params,new_sample,A)
+                    e_field -= loc*tr(L_set[j]*A[:,:,dINDEX2[state]]*R_set[params.N+1-j])
+                end
+            end
+
+            #Interaction term:
+            e_int -= params.J * (2*sample[j]-1) * (2*sample[mod(j,params.N)+1]-1)
+
+            #Update L_set:
+            L*=A[:,:,dINDEX2[sample[j]]]
+            push!(L_set,copy(L))
+        end
+
+        e_field/=ρ_sample
+
+        #println("F: ", e_field)
+        #println("I: ", e_int)
+
+        #e_int*=params.J
+
+        #local_L /=ρ_sample
+        #local_∇L/=ρ_sample
+
+        #Δ_MPO_sample = derv_MPS(params, sample, A)/ρ_sample
+        Δ_MPO_sample = derv_MPS(params, sample, L_set, R_set)/ρ_sample
+
+        #Add in interaction terms:
+        local_E  = real(e_int+e_field)
+        local_∇E = real(e_int+e_field)*Δ_MPO_sample
+        L∇L += p_sample*local_∇E # conj?
+
+        #ΔLL:
+        local_Δ = p_sample*Δ_MPO_sample
+        #local_Δ=p_sample*Δ_MPO_sample
+        ΔLL += local_Δ
+
+        #Mean local Lindbladian:
+        mean_local_Hamiltonian += real(p_sample*local_E)
+    end
+    #display(L∇L)
+    #display(ΔLL)
+    #display(Z)
+    #display(mean_local_Hamiltonian)
+
+    mean_local_Hamiltonian/=Z
+    ΔLL*=mean_local_Hamiltonian
+
+    #display((L∇L-ΔLL)/Z)
+
+    return (L∇L-ΔLL)/Z, mean_local_Hamiltonian
+end
+
+function MC_calculate_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64)
+    L∇L=zeros(Float64,params.χ,params.χ,2) #coupled product
+    ΔLL=zeros(Float64,params.χ,params.χ,2) #uncoupled product
+
+    mean_local_Hamiltonian = 0
+
+    l1 = params.h*sx
+
+    sample = rand(0:1,params.N)
+    L_set = L_MPS_strings(params, sample, A)
+    for k in 1:N_MC
+        sample, R_set = Mono_Metropolis_sweep_left(params, sample, A, L_set)
+        #R_set = R_MPS_strings(params, sample, A)
+        ρ_sample = tr(R_set[params.N+1])
+
+        local_E=0
+        local_∇L=zeros(Float64, params.χ, params.χ, 2)
+
+        L_set = Vector{Matrix{Float64}}()
+        L=Matrix{Float64}(I, params.χ, params.χ)
+        push!(L_set,copy(L))
+
+        e_field=0
+        e_int=0
+
         #L∇L*:
         for j in 1:params.N
 
@@ -146,35 +237,37 @@ function calculate_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis)
             end
 
             #Interaction term:
-            e_int -= sample[j]*sample[mod(j,params.N)+1]
+            e_int -= params.J * (2*sample[j]-1) * (2*sample[mod(j,params.N)+1]-1)
 
             #Update L_set:
             L*=A[:,:,dINDEX2[sample[j]]]
             push!(L_set,copy(L))
         end
 
-        #local_L /=ρ_sample
-        #local_∇L/=ρ_sample
+        e_field/=ρ_sample
+        # e_int/=ρ_sample ???
+
 
         Δ_MPO_sample = derv_MPS(params, sample, L_set, R_set)/ρ_sample
 
         #Add in interaction terms:
-        local_E  = e_int+e_field
-        local_∇E = (e_int+e_field)*Δ_MPO_sample
-        L∇L += p_sample*local_∇E # conj?
+        local_E  = real(e_int+e_field)
+        local_∇E = real(e_int+e_field)*Δ_MPO_sample
+        L∇L += local_∇E
 
         #ΔLL:
-        local_Δ = p_sample*Δ_MPO_sample
+        local_Δ = Δ_MPO_sample
         #local_Δ=p_sample*Δ_MPO_sample
         ΔLL += local_Δ
 
         #Mean local Lindbladian:
-        mean_local_Hamiltonian += p_sample*local_E
+        mean_local_Hamiltonian += real(local_E)
     end
 
-    mean_local_Hamiltonian/=Z
+    mean_local_Hamiltonian/=N_MC
     ΔLL*=mean_local_Hamiltonian
-    return (L∇L-ΔLL)/Z, real(mean_local_Hamiltonian)
+
+    return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian
 end
 
 function calculate_MC_gradient_partial(J,A,N_MC)

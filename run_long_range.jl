@@ -22,9 +22,9 @@ const J=0.5 #interaction strength
 const h=1.0 #transverse field strength
 const γ=1.0 #spin decay rate
 const α=0
-const N=10
+const N=20
 const dim = 2^N
-χ=4 #bond dimension
+χ=8 #bond dimension
 
 MPOMC.set_parameters(N,χ,J,h,γ,α)
 
@@ -36,8 +36,8 @@ const basis=generate_bit_basis_reversed(N)
 
 
 A_init=rand(ComplexF64, χ,χ,2,2)
-A_init[:,:,1,1]=rand(Float64,χ,χ)
-A_init[:,:,2,2]=rand(Float64,χ,χ)
+#A_init[:,:,1,1]=rand(Float64,χ,χ)
+#A_init[:,:,2,2]=rand(Float64,χ,χ)
 A=copy(A_init)
 A=reshape(A,χ,χ,4)
 
@@ -52,7 +52,7 @@ list_of_density_matrices= Array{Matrix{ComplexF64}}(undef, 0)
 
 old_L=1
 
-δ = 0.005
+δ = 0.03
 
 N_MC=2
 Q=1
@@ -61,9 +61,9 @@ F=0.99
 #ϵ=100.1
 
 @time begin
-    for k in 1:200
+    for k in 1:300
         L=0;LB=0
-        ϵ=0.2*0.99^k
+        ϵ=1.0*0.99^k
         for i in 1:10
 
             new_A=zeros(ComplexF64, χ,χ,4)
@@ -99,13 +99,13 @@ F=0.99
         push!(list_of_My,my)
         push!(list_of_Mz,mz)
 
-        #push!(list_of_purities, tensor_purity(MPOMC.params, A))
+        push!(list_of_purities, tensor_purity(MPOMC.params, A))
 
         #push!(list_of_density_matrices, make_density_matrix(MPOMC.params, A, basis))
     end
 end
 
-#error()
+error()
 
 #npzwrite("data/LR_Ising/MPOMC_list_rho_real_χ=$χ.npy", list_of_density_matrices[:])
 #npzwrite("data/LR_Ising/MPOMC_list_rho_imag_χ=$χ.npy", imag.(list_of_density_matrices))
@@ -114,7 +114,7 @@ end
 #open("MPOMC_L_SR.txt", "w") do file
 #    write(file, list_of_L)
 #end
-#npzwrite("data/MPOMC_L_SR_χ=$χ.npy", list_of_L)
+npzwrite("data/MPOMC_L_SR_χ=$χ.npy", list_of_L)
 #npzwrite("data/MPOMC_L_SGD_χ=$χ.npy", list_of_LB)
 
 
@@ -152,7 +152,8 @@ npzwrite("data/LR_Ising/ED_rho_imag_N=$(MPOMC.params.N)_χ=$(MPOMC.params.χ)_J=
 
 
 sqrt_a=sqrt(ρED)
-f=(tr(sqrt(sqrt_a*ρ*sqrt_a)))^2
+#f=(tr(sqrt(sqrt_a*(0.5*(ρ+conj(transpose(ρ)))*sqrt_a))))^2
+f=(tr(sqrt(sqrt_a*(ρ)*sqrt_a)))^2
 print(f)
 
 

@@ -114,6 +114,36 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix,
 end
 
 
+function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
+
+    #R_set = Vector{Matrix{Float64}}(undef,0)
+    R_set = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    R = Matrix{Float64}(I, params.χ, params.χ)
+    #push!(R_set, copy(R))
+    R_set[1] = R
+    C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
+    for i in params.N:-1:1
+
+        sample_p = deepcopy(sample) #deepcopy necessary?
+        sample_p[i] = 1-sample[i]
+
+        #P=MPS(params,sample_p,A)
+        P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
+        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        if rand() <= metropolis_prob
+            #sample = sample_p
+            sample = deepcopy(sample_p)
+        end
+
+        #R = A[:,:,dINDEX2[sample[i]]]*R
+        R = A[:,:,2-sample[i]]*R
+        #push!(R_set, copy(R))
+        R_set[params.N+2-i] = R
+        C = tr(L_set[i]*R)
+    end
+    return sample, R_set::Vector{Matrix{Float64}}
+end
+
 
 
 
