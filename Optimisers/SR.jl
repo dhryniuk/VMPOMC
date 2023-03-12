@@ -1,7 +1,7 @@
 export SR_calculate_gradient, SR_calculate_MC_gradient_full, SR_LdagL_gradient, MT_SR_MC_grad, multi_threaded_SR_calculate_MC_gradient_full
 
 #experimental:
-export distributed_SR_calculate_MC_gradient_full, MC_SR_calculate_MPS_gradient
+export distributed_SR_calculate_MC_gradient_full, MC_SR_calculate_MPS_gradient, distributed_SR_calculate_MC_MPS_gradient
 
 function SR_calculate_gradient(p::parameters, A::Array{ComplexF64}, l1::Matrix{ComplexF64},ϵ,basis)
     #χ=size(A[:,:,1])[1]
@@ -732,6 +732,8 @@ end
 
 
 function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::Int64, ϵ::Float64)
+
+    # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,p.χ,p.χ,2) #coupled product
     ΔLL::Array{Float64,3} = zeros(Float64,p.χ,p.χ,2) #uncoupled product
 
@@ -740,9 +742,6 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
     G = zeros(Float64, p.χ, p.χ, 2)
     Left = zeros(Float64, p.χ, p.χ, 2)
     Right = zeros(Float64, p.χ, p.χ, 2)
-    function flatten_index(i, j, s)
-        return i+p.χ*(j-1)+p.χ^2*(s-1)
-    end
 
     mean_local_Hamiltonian::Float64 = 0
 
@@ -750,11 +749,13 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
     h1::Matrix{ComplexF64} = p.h*sx
 
     # Initialize sample and L_set for that sample:
-    sample = rand(Bool, p.N)
-    L_set = L_MPS_strings(p, sample, A)
+    sample, L_set = Metropolis_burn_in(p, A)
+
+    acceptance::UInt64=0
 
     for _ in 1:N_MC
-        sample, R_set = Mono_Metropolis_sweep_left(p, sample, A, L_set)
+        sample, R_set, acc = Mono_Metropolis_sweep_left(p, sample, A, L_set)
+        acceptance+=acc
         ρ_sample = tr(R_set[p.N+1])
 
         # Prepare new L_set of left MPS strings:
@@ -766,7 +767,7 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
         e_int::Float64 = 0
 
         #L∇L*:
-        for j::UInt8 in 1:p.N
+        for j::UInt16 in 1:p.N
 
             #1-local part (field):
             bra_L::Transpose{ComplexF64, Vector{ComplexF64}} = transpose(dVEC2[sample[j]])*h1
@@ -774,12 +775,12 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
                 loc::ComplexF64 = bra_L[i]
                 if loc!=0
                     state::Bool = TPSC2[i]
-                    e_field -= loc*tr(L_set[j]*A[:,:,2-state]*R_set[p.N+1-j])
+                    @inbounds e_field -= loc*tr(L_set[j]*A[:,:,2-state]*R_set[p.N+1-j])
                 end
             end
 
             #Interaction term:
-            e_int -= p.J * (2*sample[j]-1) * (2*sample[mod(j,p.N)+1]-1)
+            @inbounds e_int -= p.J * (2*sample[j]-1) * (2*sample[mod(j,p.N)+1]-1)
 
             #Update L_set:
             L*=A[:,:,2-sample[j]]
@@ -807,8 +808,11 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
         G = Δ_MPO_sample
         Left += G #change order of conjugation, but it shouldn't matter
         Right+= conj(G)
-        @inbounds for (s, j, i, ss, jj, ii) in zip(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
-            S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] += conj(G[i,j,s])*G[ii,jj,ss]
+        #@inbounds for (s, j, i, ss, jj, ii) in zip(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
+        for s in 1:2, j in 1:p.χ, i in 1:p.χ, ss in 1:2, jj in 1:p.χ, ii in 1:p.χ
+        #for (s,j,i,ss,jj,ii) in Iterators.product(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
+            #println(s, " ", j, " ", i, " ", ss, " ", jj, " ", ii)
+            @inbounds S[flatten_index(i,j,s,p),flatten_index(ii,jj,ss,p)] += conj(G[i,j,s])*G[ii,jj,ss]
         end
     end
     mean_local_Hamiltonian/=N_MC
@@ -818,8 +822,9 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
     S./=N_MC
     Left./=N_MC
     Right./=N_MC
-    @inbounds for (s, j, i, ss, jj, ii) in zip(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
-        S[flatten_index(i,j,s),flatten_index(ii,jj,ss)] -= Left[i,j,s]*Right[ii,jj,ss]
+    #@inbounds for (s, j, i, ss, jj, ii) in zip(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
+    for s in 1:2, j in 1:p.χ, i in 1:p.χ, ss in 1:2, jj in 1:p.χ, ii in 1:p.χ 
+        @inbounds S[flatten_index(i,j,s,p),flatten_index(ii,jj,ss,p)] -= Left[i,j,s]*Right[ii,jj,ss]
     end
 
     S+=ϵ*Matrix{Int}(I, 2*p.χ^2, 2*p.χ^2)
@@ -830,5 +835,151 @@ function MC_SR_calculate_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::In
     flat_grad = inv(S)*flat_grad
     grad = reshape(flat_grad, p.χ, p.χ,2 )
 
-    return grad, mean_local_Hamiltonian
+    return grad, mean_local_Hamiltonian, acceptance/(p.N*N_MC)
 end
+
+
+
+function sample_with_SR_MPS(p::parameters, A::Array{Float64}, h1::Matrix{ComplexF64}, N_MC::Int64)
+
+    #Initialize variables:
+    L∇L::Array{Float64,3} = zeros(Float64, p.χ, p.χ, 2)
+    ΔLL::Array{Float64,3} = zeros(Float64, p.χ, p.χ, 2)
+    S=zeros(Float64, 2*p.χ^2, 2*p.χ^2)
+    Left=zeros(Float64, p.χ, p.χ, 2)
+    Right=zeros(Float64, p.χ, p.χ, 2)
+
+    mean_local_Hamiltonian::Float64 = 0
+
+    sample = rand(Bool, p.N)
+    L_set = L_MPS_strings(p, sample, A)
+    for _ in 1:N_MC
+        sample, R_set = Mono_Metropolis_sweep_left(p, sample, A, L_set)
+        ρ_sample = tr(R_set[p.N+1])
+
+        # Prepare new L_set of left MPS strings:
+        L_set = [ Matrix{Float64}(undef, p.χ, p.χ) for _ in 1:p.N+1 ]
+        L = Matrix{Float64}(I, p.χ, p.χ)
+        L_set[1] = L
+
+        e_field::Float64 = 0
+        e_int::Float64 = 0
+
+        #L∇L*:
+        for j::UInt8 in 1:p.N
+
+            #1-local part (field):
+            bra_L::Transpose{ComplexF64, Vector{ComplexF64}} = transpose(dVEC2[sample[j]])*h1
+            for i::UInt8 in 1:2
+                loc::ComplexF64 = bra_L[i]
+                if loc!=0
+                    state::Bool = TPSC2[i]
+                    @inbounds e_field -= loc*tr(L_set[j]*A[:,:,2-state]*R_set[p.N+1-j])
+                end
+            end
+
+            #Interaction term:
+            @inbounds e_int -= p.J * (2*sample[j]-1) * (2*sample[mod(j,p.N)+1]-1)
+
+            #Update L_set:
+            L*=A[:,:,2-sample[j]]
+            L_set[j+1] = L
+        end
+
+        e_field/=ρ_sample
+        # e_int/=ρ_sample ???
+
+        Δ_MPO_sample = derv_MPS(p, sample, L_set, R_set)/ρ_sample
+
+        #Add energies:
+        local_E::Float64 = real(e_int+e_field)
+        local_∇E::Array{Float64,3} = real(e_int+e_field)*Δ_MPO_sample
+        L∇L += local_∇E
+
+        #ΔLL:
+        local_Δ = Δ_MPO_sample
+        ΔLL += local_Δ
+
+        #Mean local Lindbladian:
+        mean_local_Hamiltonian += real(local_E)
+
+        #Metric tensor:
+        G = Δ_MPO_sample
+        Left += G #change order of conjugation, but it shouldn't matter
+        Right+= conj(G)
+        #@inbounds for (s, j, i, ss, jj, ii) in zip(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
+        for s in 1:2, j in 1:p.χ, i in 1:p.χ, ss in 1:2, jj in 1:p.χ, ii in 1:p.χ
+        #for (s,j,i,ss,jj,ii) in Iterators.product(1:2, 1:p.χ, 1:p.χ, 1:2, 1:p.χ, 1:p.χ)
+            #println(s, " ", j, " ", i, " ", ss, " ", jj, " ", ii)
+            @inbounds S[flatten_index(i,j,s,p),flatten_index(ii,jj,ss,p)] += conj(G[i,j,s])*G[ii,jj,ss]
+        end
+    end
+    #mean_local_Hamiltonian/=N_MC
+    #ΔLL*=mean_local_Hamiltonian
+    return dist_output(L∇L, ΔLL, mean_local_Hamiltonian, S, Left, Right)
+    #return [L∇L::Array{Float64,3}, ΔLL::Array{Float64,3}, mean_local_Hamiltonian::Float64, S::Array{Float64, 2}, Left::Array{Float64, 3}, Right::Array{Float64, 3}]
+end
+
+# The only purpose of this struct is to ensure type-stability during reduction with @distributed
+# not sure if there is a better way to do this
+mutable struct dist_output
+    L∇L::Array{Float64, 3}
+    ΔLL::Array{Float64, 3}
+    mean_local_Hamiltonian::Float64
+    S::Array{Float64, 2}
+    Left::Array{Float64, 3}
+    Right::Array{Float64, 3}
+end
+Base.:+(x::dist_output, y::dist_output) = dist_output(x.L∇L + y.L∇L, x.ΔLL + y.ΔLL, x.mean_local_Hamiltonian + y.mean_local_Hamiltonian, x.S + y.S, x.Left + y.Left, x.Right + y.Right)
+
+
+function distributed_SR_calculate_MC_MPS_gradient(p::parameters, A::Array{Float64}, N_MC::Int64, ϵ::Float64)
+
+    # Define 1-local Hamiltonian:
+    h1::Matrix{ComplexF64} = p.h*sx
+
+    #perform reduction:
+    output::dist_output = @distributed (+) for i=1:nworkers()
+        #sample_with_SR_long_range_MPS(p, A, l1, N_MC, N_sweeps)
+        sample_with_SR_MPS(p, A, h1, N_MC)
+    end
+
+    #L∇L=output[1]
+    #ΔLL=output[2]
+    #mean_local_Hamiltonian=output[3]
+    #S=output[4]
+    #Left=output[5]
+    #Right=output[6]
+
+    L∇L=output.L∇L
+    ΔLL=output.ΔLL
+    mean_local_Hamiltonian=output.mean_local_Hamiltonian
+    S=output.S
+    Left=output.Left
+    Right=output.Right
+
+    #mean_local_Hamiltonian/=(nworkers())
+    #ΔLL/=(nworkers())
+    mean_local_Hamiltonian/=(N_MC*nworkers())
+    ΔLL*=mean_local_Hamiltonian
+
+    #Metric tensor:
+    S/=(N_MC*nworkers())
+    Left/=(N_MC*nworkers())
+    Right/=(N_MC*nworkers())
+
+    for s in 1:2, j in 1:p.χ, i in 1:p.χ, ss in 1:2, jj in 1:p.χ, ii in 1:p.χ
+        @inbounds S[flatten_index(i,j,s,p),flatten_index(ii,jj,ss,p)] -= Left[i,j,s]*Right[ii,jj,ss]
+    end
+
+    #S+=max(0.001,1*0.95^step)*Matrix{Int}(I, χ*χ*4, χ*χ*4)
+    S+=ϵ*Matrix{Int}(I, p.χ*p.χ*2, p.χ*p.χ*2)
+
+    grad = (L∇L-ΔLL)/(N_MC*nworkers())
+    flat_grad = reshape(grad, 2*p.χ^2)
+    flat_grad = inv(S)*flat_grad
+    grad = reshape(flat_grad, p.χ, p.χ, 2)
+
+    return grad, real(mean_local_Hamiltonian)
+end
+

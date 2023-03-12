@@ -11,6 +11,7 @@ mutable struct parameters
     h::Float64
     γ::Float64
     α::Int
+    burn_in::Int
 end
 
 mutable struct density_matrix#{Coeff<:Int64, Vec<:Vector{Float64}}
@@ -21,6 +22,8 @@ mutable struct density_matrix#{Coeff<:Int64, Vec<:Vector{Float64}}
     #bra::Vector{Int8}
     #density_matrix(coeff,ket,bra) = new(coeff,ket,bra)
 end
+
+Base.:*(x::density_matrix, y::density_matrix) = density_matrix(x.coeff * y.coeff, vcat(x.ket, y.ket), vcat(x.bra, y.bra))
 
 function MPO(params::parameters, sample::density_matrix, A::Array{ComplexF64})
     MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
@@ -41,28 +44,34 @@ end
 
 #Left strings of MPOs:
 function L_MPO_strings(params::parameters, sample::density_matrix, A::Array{ComplexF64})
-    L = Vector{Matrix{ComplexF64}}()
     MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
-    push!(L,copy(MPO))
+    #L = Vector{Matrix{ComplexF64}}()
+    #push!(L,copy(MPO))
+    L = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    L[1] = copy(MPO)    ### IT SEEMS COPY IS VERY IMPORTANT!
     for i::UInt8 in 1:params.N
-        MPO*=A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
+        MPO *= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
         #MPO*=A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample.bra[i]]]
-        push!(L,copy(MPO))
+        #push!(L,copy(MPO))
+        L[i+1] = copy(MPO)
     end
     return L
 end
 
 #Right strings of MPOs:
 function R_MPO_strings(params::parameters, sample::density_matrix, A::Array{ComplexF64})
-    R = Vector{Matrix{ComplexF64}}()
     MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
-    push!(R,copy(MPO))
+    #R = Vector{Matrix{ComplexF64}}()
+    #push!(R,copy(MPO))
+    R = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    R[1] = copy(MPO) 
     for i::UInt8 in params.N:-1:1
-        MPO=A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*MPO
+        MPO = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*MPO
 
         # MATRIX MULTIPLICATION IS NOT COMMUTATIVE, IDIOT
 
-        push!(R,copy(MPO))
+        #push!(R,copy(MPO))
+        R[params.N+2-i] = copy(MPO)
     end
     return R
 end
@@ -96,11 +105,11 @@ function derv_MPO(params::parameters, sample::density_matrix, L_set::Vector{Matr
     #R_set = R_MPO_strings(sample, A)
     for m::UInt8 in 1:params.N
         B = R_set[params.N+1-m]*L_set[m]
-        for i in 1:params.χ
-            for j in 1:params.χ
-                ∇[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += B[i,j] + B[j,i]
+        for i::UInt8 in 1:params.χ
+            for j::UInt8 in 1:params.χ
+                @inbounds ∇[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += B[j,i] # + B[i,j]
             end
-            ∇[i,i,:]./=2
+            #@inbounds ∇[i,i,:]./=2
         end
     end
     return ∇

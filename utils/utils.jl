@@ -3,6 +3,9 @@ export make_density_matrix, adaptive_step_size
 #Useful dictionaries:
 dREVINDEX = Dict(1 => (0,0), 2 => (0,1), 3 => (1,0), 4 => (1,1))
 dINDEX = Dict((0,0) => 1, (0,1) => 2, (1,0) => 3, (1,1) => 4)
+function dINDEXf(b::Bool, k::Bool)
+    return 1+2*b+k
+end
 dVEC =   Dict((0,0) => [1,0,0,0], (0,1) => [0,1,0,0], (1,0) => [0,0,1,0], (1,1) => [0,0,0,1])
 dUNVEC = Dict([1,0,0,0] => (0,0), [0,1,0,0] => (0,1), [0,0,1,0] => (1,0), [0,0,0,1] => (1,1))
 TPSC = [(0,0),(0,1),(1,0),(1,1)]
@@ -22,6 +25,10 @@ TPSC = [(1,1),(1,0),(0,1),(0,0)]
 #dINDEX2 = Dict(1 => 1, 0 => 2)
 =#
 
+
+function flatten_index(i,j,s,p::parameters)
+    return i+p.χ*(j-1)+p.χ^2*(s-1)
+end
 
 function draw2(n)
     a = rand(1:n)
@@ -69,12 +76,13 @@ function make_density_matrix(params, A, basis)
     return ρ
 end
 
-function set_parameters(N,χ,J,h,γ,α)
-	params.N = N
+function set_parameters(N,χ,J,h,γ,α,burn_in)
+	params.N = N;
     params.dim = 2^N;
     params.χ = χ;
     params.J = J;
     params.h = h;
     params.γ = γ;
     params.α = α;
+    params.burn_in = burn_in;
 end

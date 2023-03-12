@@ -46,7 +46,7 @@ function make_bit_Hamiltonian(N, J::Real, h::Real, basis::Vector{Vector{Bool}})#
     i::UInt32 = 0
     for state in basis
         i += 1
-        @simd for spin in 1:N#-1
+        @simd for spin in 1:N-1
             #H[i, i] -= state[spin]*state[spin+1]
             H[i, i] -= J*(2*state[spin]-1)*(2*state[mod(spin,N)+1]-1)
         end

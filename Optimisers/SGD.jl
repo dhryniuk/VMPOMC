@@ -548,3 +548,181 @@ function LdagL_gradient(params,A,l1,basis) #CHECK IF COMPLEX CONJUGATE AND TRANS
     mean_Δ*=mean_local_Lindbladian
     return (ΔLL-mean_Δ)/Z, real(mean_local_Lindbladian)
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export calculate_open_MPS_gradient
+
+function calculate_open_MPS_gradient(params::parameters, A::Array{Float64}, V::Array{Float64}, basis)
+    L∇L_bulk=zeros(Float64,params.χ,params.χ,2) #coupled product
+    ΔLL_bulk=zeros(Float64,params.χ,params.χ,2) #uncoupled product
+    L∇L_boundary=zeros(Float64,params.χ,2) #coupled product
+    ΔLL_boundary=zeros(Float64,params.χ,2) #uncoupled product
+    Z=0
+
+    mean_local_Hamiltonian = 0
+
+    l1 = params.h*sx
+
+    for k in 1:params.dim
+        sample = basis[k]
+        #println(sample)
+        L_set = open_L_MPS_strings(params, sample, A, V)
+        #display(L_set)
+        #error()
+        R_set = open_R_MPS_strings(params, sample, A, V)
+        ρ_sample = L_set[params.N-1]*R_set[1]
+        #ρ_sample = MPS(params, sample, A)
+        p_sample = ρ_sample*conj(ρ_sample)
+        Z+=p_sample
+
+        local_E=0
+        local_∇L=zeros(Float64, params.χ, params.χ, 2)
+
+        #L_set = Transpose{Float64, Vector{Float64}}()
+        L = [ transpose(Vector{Float64}(undef,params.χ)) for _ in 1:params.N-1 ]
+        #L=Matrix{Float64}(I, params.χ, params.χ)
+        #push!(L_set,copy(L))
+
+        e_field=0
+        e_int=0
+        #L∇L*:
+
+        #left boundary:
+        #1-local part (field):
+        s = dVEC2[sample[1]]
+        bra_L = transpose(s)*l1
+        for i in 1:2
+            loc = bra_L[i]
+            if loc!=0
+                state = TPSC2[i]
+                #display(transpose(V[:,dINDEX2[state]]))
+                #display(R_set[params.N-1])
+                #display(transpose(V[:,dINDEX2[state]])*R_set[params.N-1])
+                e_field -= loc*transpose(V[:,dINDEX2[state]])*R_set[params.N-1]
+            end
+        end
+
+        #Interaction term:
+        e_int -= params.J * (2*sample[1]-1) * (2*sample[2]-1)
+
+        #Update L_set:
+        L=transpose(V[:,dINDEX2[sample[1]]])
+        #push!(L_set,copy(L))
+        L_set[1] = copy(L)
+        #println("LSET")
+        #display(L_set)
+
+
+        #bulk:
+        for j in 2:params.N-1
+
+            #1-local part (field):
+            s = dVEC2[sample[j]]
+            bra_L = transpose(s)*l1
+            for i in 1:2
+                loc = bra_L[i]
+                if loc!=0
+                    state = TPSC2[i]
+                    #new_sample = deepcopy(sample)
+                    #new_sample[j] = state
+                    #e_field -= loc*MPS(params,new_sample,A)
+                    e_field -= loc*L_set[j-1]*A[:,:,dINDEX2[state]]*R_set[params.N-j]
+                end
+            end
+
+            #Interaction term:
+            e_int -= params.J * (2*sample[j]-1) * (2*sample[mod(j,params.N)+1]-1)
+
+            #Update L_set:
+            L*=A[:,:,dINDEX2[sample[j]]]
+            #push!(L_set,copy(L))
+            L_set[j] = copy(L)
+        end
+
+
+        #right boundary:
+        s = dVEC2[sample[params.N]]
+        bra_L = transpose(s)*l1
+        for i in 1:2
+            loc = bra_L[i]
+            if loc!=0
+                state = TPSC2[i]
+                #println("LSET")
+                #display(L_set[params.N-1])
+                #display(V[:,dINDEX2[state]])
+                #display(L_set[params.N-1]*V[:,dINDEX2[state]])
+                #display((L_set[params.N-1]*V[:,dINDEX2[state]])[1])
+                e_field -= loc*L_set[params.N-1]*V[:,dINDEX2[state]]
+            end
+        end
+
+        #Update L_set:
+        #L*=V[:,dINDEX2[sample[params.N]]]
+        #push!(L_set,copy(L))
+
+
+
+        e_field/=ρ_sample
+
+        #println("F: ", e_field)
+        #println("I: ", e_int)
+
+        #e_int*=params.J
+
+        #local_L /=ρ_sample
+        #local_∇L/=ρ_sample
+
+        #Δ_MPO_sample = derv_MPS(params, sample, A)/ρ_sample
+        Δ_bulk_sample, Δ_boundary_sample = open_derv_MPS(params, sample, L_set, R_set)
+
+        Δ_bulk_sample./=ρ_sample
+        Δ_boundary_sample./=ρ_sample
+
+        #Add in interaction terms:
+        local_E  = real(e_int+e_field)
+
+        local_∇E_bulk = real(e_int+e_field)*Δ_bulk_sample
+        L∇L_bulk += p_sample*local_∇E_bulk
+
+        local_∇E_boundary = real(e_int+e_field)*Δ_boundary_sample
+        L∇L_boundary += p_sample*local_∇E_boundary
+
+        #ΔLL:
+        local_Δ_bulk = p_sample*Δ_bulk_sample
+        ΔLL_bulk += local_Δ_bulk
+
+        local_Δ_boundary = p_sample*Δ_boundary_sample
+        ΔLL_boundary += local_Δ_boundary
+
+        #Mean local Lindbladian:
+        mean_local_Hamiltonian += real(p_sample*local_E)
+    end
+    #display(L∇L)
+    #display(ΔLL)
+    #display(Z)
+    #display(mean_local_Hamiltonian)
+
+    mean_local_Hamiltonian/=Z
+    ΔLL_bulk*=mean_local_Hamiltonian
+    ΔLL_boundary*=mean_local_Hamiltonian
+
+    #display((L∇L-ΔLL)/Z)
+
+    return (L∇L_bulk-ΔLL_bulk)/Z, (L∇L_boundary-ΔLL_boundary)/Z, mean_local_Hamiltonian
+end
