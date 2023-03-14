@@ -215,3 +215,99 @@ function tp_across_3(A::Array{ComplexF64})
     #return @tensor B[a,b,u,v]*B[b,a,v,u] #N=2
     return @tensor B[a,c,u,d]*B[c,b,d,v]*B[b,a,v,u] #N=3
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export open_MPO, open_L_MPO_strings, open_R_MPO_strings, open_derv_MPO, normalize_open_MPO
+
+
+function open_MPO(params::parameters, sample::density_matrix, A::Array{ComplexF64}, V::Array{ComplexF64})
+    MPO = transpose( V[:,dINDEX[(sample.ket[1],sample.bra[1])]] ) #left boundary
+    for i::UInt16 in 2:params.N-1 #bulk
+        MPS*=A[:,:,dINDEX[(sample.ket[i],sample.bra[i])] ]
+    end
+    MPS*= V[:,dINDEX[(sample.ket[params.N],sample.bra[params.N])] ]#right boundary
+    return MPS::ComplexF64
+end
+
+#Left strings of MPSs:
+function open_L_MPO_strings(params::parameters, sample::density_matrix, A::Array{ComplexF64}, V::Array{ComplexF64})
+    MPO = transpose( V[:,dINDEX[(sample.ket[1],sample.bra[1])] ] )#left boundary
+    L = [ transpose(Vector{ComplexF64}(undef,params.χ)) for _ in 1:params.N-1 ]
+    L[1] = copy(MPO)
+    for i::UInt16 in 2:params.N-1
+        MPO *= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
+        L[i] = copy(MPO)
+    end
+    #MPS *= V[:,2-sample[params.N]]
+    #L[params.N] = copy(MPS)
+    return L
+end
+
+#Right strings of MPSs:
+function open_R_MPO_strings(params::parameters, sample::density_matrix, A::Array{ComplexF64}, V::Array{ComplexF64})
+    MPO = V[:,dINDEX[(sample.ket[params.N],sample.bra[params.N])]] #left boundary
+    R = [ Vector{ComplexF64}(undef,params.χ) for _ in 1:params.N-1 ]
+    R[1] = copy(MPO)
+    for i::UInt16 in params.N-1:-1:2
+        MPO = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*MPO
+        #R[i+1] = MPS  MIGHT BE WRONG!!
+        R[params.N+1-i] = copy(MPO)
+    end
+    #MPS = transpose(V[:,2-sample[1]])*MPS
+    #R[params.N] = copy(MPS)
+    return R
+end
+
+#Claculates the matrix of all derivatives of all elements of the tensor : 
+function open_derv_MPO(params::parameters, sample::density_matrix, L_set, R_set)
+    ∇_bulk::Array{ComplexF64,3}=zeros(ComplexF64, params.χ, params.χ, 4)
+    ∇_boundary::Array{ComplexF64,2}=zeros(ComplexF64, params.χ, 4)
+    for m::UInt16 in 2:params.N-1
+        #B = L_set[m]*R_set[params.N+1-m]
+        for i::UInt8 in 1:params.χ
+            for j::UInt8 in 1:params.χ 
+                @inbounds ∇_bulk[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += L_set[m-1][i]*R_set[params.N-m][j] #B[j,i] # + B[i,j]
+            end
+            #@inbounds ∇[i,i,:]./=2
+        end
+    end
+    for i::UInt8 in 1:params.χ
+        ∇_boundary[i,dINDEX[(sample.ket[1],sample.bra[1])]] += R_set[params.N-1][i]
+        ∇_boundary[i,dINDEX[(sample.ket[params.N],sample.bra[params.N])]] += L_set[params.N-1][i]
+    end
+    return ∇_bulk, ∇_boundary
+end
+
+function normalize_open_MPO(params::parameters, A::Array{ComplexF64}, V::Array{ComplexF64})
+    MPO=(A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]])^(params.N-2)
+    return ( transpose(V[:,dINDEX[(1,1)]]+V[:,dINDEX[(0,0)]]) * MPO * (V[:,dINDEX[(1,1)]]+V[:,dINDEX[(0,0)]]) )^(1/params.N)#::ComplexF64
+end

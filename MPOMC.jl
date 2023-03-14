@@ -9,6 +9,8 @@ using ArnoldiMethod
 #using Plots
 #using NPZ
 #using DelimitedFiles
+using DoubleFloats
+
 
 #Exact diagonalisation routines:
 include("ED/ED_Ising.jl")
@@ -40,7 +42,7 @@ include("Optimisers/gradient.jl")
 include("utils/utils.jl")
 
 
-params=parameters(0,0,0,0,0,0,0)
+params=parameters(0,0,0,0,0,0,0,0)
 
 #addprocs(10)
 
