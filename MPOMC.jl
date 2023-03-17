@@ -12,6 +12,10 @@ using ArnoldiMethod
 using DoubleFloats
 
 
+#Other utilities:
+include("utils/utils.jl")
+
+
 #Exact diagonalisation routines:
 include("ED/ED_Ising.jl")
 include("ED/ED_Lindblad.jl")
@@ -21,12 +25,15 @@ include("ED/ED_Lindblad.jl")
 
 
 #Matrix Product functions:
-include("MPO/MPO.jl")
 include("MPO/MPS.jl")
+include("MPO/fMPS.jl")
+include("MPO/MPO.jl")
+#include("MPO/fMPO.jl")
 
 
 #Samplers:
 include("Samplers/Metropolis.jl")
+include("Samplers/fMetropolis.jl")
 
 
 #Optimisers:
@@ -37,12 +44,12 @@ include("Optimisers/MPS/SGD.jl")
 include("Optimisers/MPS/SR.jl")
 #include("Optimisers/MPS/distributed_SR.jl")
 
-#include("Optimisers/MPO/Exact.jl")
-#include("Optimisers/MPO/SGD.jl")
-#include("Optimisers/MPO/SR.jl")
+include("Optimisers/MPO/Exact.jl")
+include("Optimisers/MPO/SGD.jl")
+include("Optimisers/MPO/SR.jl")
 
-#include("Optimisers/fMPS/Exact.jl")
-#include("Optimisers/fMPS/SGD.jl")
+include("Optimisers/fMPS/Exact.jl")
+include("Optimisers/fMPS/SGD.jl")
 #include("Optimisers/fMPS/SR.jl")
 
 #include("Optimisers/fMPO/Exact.jl")
@@ -51,10 +58,6 @@ include("Optimisers/MPS/SR.jl")
 
 #export calculate_gradient, calculate_MC_gradient_full
 #export SR_calculate_gradient, SR_calculate_MC_gradient_full
-
-
-#Other utilities:
-include("utils/utils.jl")
 
 
 params=parameters(0,0,0,0,0,0,0,0)

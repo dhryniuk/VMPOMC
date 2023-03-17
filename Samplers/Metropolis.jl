@@ -68,7 +68,8 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::density_matrix, 
             sample.bra = deepcopy(sample_p.bra)
         end
 
-        R = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*R
+        #R = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*R
+        R = A[:,:,1+2*sample.ket[i]+sample.bra[i]]*R
         push!(R_set, copy(R))
         C = tr(L_set[i]*R)
     
@@ -205,7 +206,7 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A:
 end
 
 
-function Metropolis_burn_in(p::parameters, A::Array{Float64})
+function Metropolis_burn_in(p::parameters, A::Array{Float64,3})
     
     # Initialize random sample and calculate L_set for that sample:
     sample = rand(Bool, p.N)
@@ -220,11 +221,28 @@ function Metropolis_burn_in(p::parameters, A::Array{Float64})
     return sample, L_set
 end
 
-function Metropolis_burn_in(p::parameters, A::Array{ComplexF64})
+function Metropolis_burn_in(p::parameters, A::Array{ComplexF64,3})
     
     # Initialize random sample and calculate L_set for that sample:
     sample = rand(Bool, p.N)
     L_set = L_MPS_strings(p, sample, A)
+    
+    # Perform burn_in:
+    for _ in 1:p.burn_in
+        sample, R_set = Mono_Metropolis_sweep_left(p,sample,A,L_set)
+        sample, L_set = Mono_Metropolis_sweep_right(p,sample,A,R_set)
+    end
+
+    return sample, L_set
+end
+
+export MPO_Metropolis_burn_in
+
+function MPO_Metropolis_burn_in(p::parameters, A::Array{ComplexF64,3})
+    
+    # Initialize random sample and calculate L_set for that sample:
+    sample::density_matrix = density_matrix(1,rand(Bool, p.N),rand(Bool, p.N))
+    L_set = L_MPO_strings(p, sample, A)
     
     # Perform burn_in:
     for _ in 1:p.burn_in

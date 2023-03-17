@@ -23,9 +23,9 @@ const J=0.5 #interaction strength
 const h=1.0 #transverse field strength
 const γ=1.0 #spin decay rate
 const α=0
-const N=5
+const N=2
 const dim = 2^N
-χ=5 #bond dimension
+χ=2 #bond dimension
 const burn_in = 0
 
 MPOMC.set_parameters(N,χ,J,h,γ,α,burn_in)
@@ -38,15 +38,15 @@ H = make_bit_Hamiltonian(N,J,h,basis)
 display(H)
 #error()
 
+h1 = h*sx
+
 E_n, Psi_n = eigen(H)
 GS = E_n[1]
 println("Ground state E/N: ", GS/N)
 
 
-A_init=rand(ComplexF64, χ,χ,2)
-display(A_init)
-#error()
-#A_init=rand(Float64, χ,χ,2)
+#A_init=rand(ComplexF64, χ,χ,2)
+A_init=rand(Float64, χ,χ,2)
 A=copy(A_init)
 A=reshape(A,χ,χ,2)
 
@@ -55,9 +55,8 @@ A=reshape(A,χ,χ,2)
 #display(∇)
 #error()
 #A.-=0.5
-#A/=maximum(A) #very important
-#A/=N
-A./=tensor_normalize_MPS(MPOMC.params, A)
+#A./=maximum(abs.(A))
+A=normalize_MPS(MPOMC.params, A)
 
 
 
@@ -70,20 +69,20 @@ list_of_E = Array{Float64}(undef, 0)
 δ = 0.03
 
 Q=1
-F=0.99
+F=0.95
 ϵ=0.01
 
 @time begin
-    for k in 1:1000
+    for k in 1:100
         E=0
         acc::Float64=0
         for i in 1:1
             #display(A)
 
             new_A=zeros(Float64, χ,χ,2)
-            ∇,E=calculate_MPS_gradient(MPOMC.params,A,basis) 
-            #∇,E=MC_calculate_MPS_gradient(MPOMC.params,A,10*k) 
-            #∇,E,acc=MC_SR_calculate_MPS_gradient(MPOMC.params,A,50*k+300,ϵ) 
+            ∇,E=Exact_MPS_gradient(MPOMC.params,A,basis,h1) 
+            #∇,E=SGD_MPS_gradient(MPOMC.params,A,10*k,h1) 
+            #∇,E,acc=SR_MPS_gradient(MPOMC.params,A,10*k,ϵ,h1) 
             #∇,E,acc=MPS_calculate_gradient(MPOMC.params,A,50*k+300,ϵ) 
             #∇,E=distributed_SR_calculate_MC_MPS_gradient(MPOMC.params,A,10*k,ϵ)
             #display(new_A)
@@ -91,7 +90,8 @@ F=0.99
             ∇./=maximum(abs.(∇))
             new_A = A - 1.0*δ*F^k*∇
             global A = new_A
-            #global A./=normalize_MPS(MPOMC.params, A)
+            #display(∇)
+            global A=normalize_MPS(MPOMC.params, A)
             #global A./=tensor_normalize_MPS(MPOMC.params, A)
             #A/=maximum(abs.(A))
         end

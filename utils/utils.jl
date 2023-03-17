@@ -7,8 +7,9 @@ function dINDEXf(b::Bool, k::Bool)
     return 1+2*b+k
 end
 dVEC =   Dict((0,0) => [1,0,0,0], (0,1) => [0,1,0,0], (1,0) => [0,0,1,0], (1,1) => [0,0,0,1])
+dVEC_transpose = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
 dUNVEC = Dict([1,0,0,0] => (0,0), [0,1,0,0] => (0,1), [0,0,1,0] => (1,0), [0,0,0,1] => (1,1))
-TPSC = [(0,0),(0,1),(1,0),(1,1)]
+TPSC::Array{Tuple{Bool,Bool}} = [(0,0),(0,1),(1,0),(1,1)]
 #TPSC = [(0,0),(1,0),(0,1),(1,1)]
 
 dINDEX2 = Dict(1 => 1, 0 => 2)
@@ -25,6 +26,16 @@ TPSC = [(1,1),(1,0),(0,1),(0,0)]
 #dINDEX2 = Dict(1 => 1, 0 => 2)
 =#
 
+mutable struct parameters
+    N::Int64
+    dim::Int64
+    χ::Int64
+    J::Float64
+    h::Float64
+    γ::Float64
+    α::Int
+    burn_in::Int
+end
 
 function flatten_index(i,j,s,p::parameters)
     return i+p.χ*(j-1)+p.χ^2*(s-1)
