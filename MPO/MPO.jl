@@ -3,17 +3,6 @@ export normalize_MPO, normalize_MPS, calculate_z_magnetization, calculate_x_magn
 #temporary:
 export hermetize_MPO, increase_bond_dimension, L_MPO_strings, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
-mutable struct parameters
-    N::Int
-    dim::Int
-    χ::Int
-    J::Float64
-    h::Float64
-    γ::Float64
-    α::Int
-    burn_in::Int
-end
-
 mutable struct density_matrix#{Coeff<:Int64, Vec<:Vector{Float64}}
     coeff::ComplexF64
     ket::Vector{Bool}

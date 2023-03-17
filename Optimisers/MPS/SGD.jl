@@ -1,6 +1,6 @@
-export MC_MPS_gradient
+export SGD_MPS_gradient
 
-function MC_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1::Matrix)
+function SGD_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1::Matrix)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product
@@ -23,9 +23,9 @@ function MC_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1:
         L=Matrix{Float64}(I, params.χ, params.χ)
         push!(L_set,copy(L))
 
-        e_field=0
+        e_field::Float64=0
         #L∇L*:
-        for j in 1:params.N
+        for j::UInt16 in 1:params.N
             #1-local part (field):
             e_field -= one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
 
@@ -41,7 +41,7 @@ function MC_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1:
         Δ_MPO_sample = ∂MPS(params, sample, L_set, R_set)/ρ_sample
 
         #Add in interaction terms:
-        local_E  = e_int+e_field
+        local_E = e_int+e_field
         L∇L += local_E*Δ_MPO_sample
 
         #ΔLL:
@@ -58,7 +58,7 @@ function MC_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1:
     return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian
 end
 
-function MC_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64, h1::Matrix)
+function SGD_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64, h1::Matrix)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product

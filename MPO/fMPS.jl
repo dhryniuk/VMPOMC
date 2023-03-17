@@ -5,7 +5,7 @@ function fMPS(params::parameters, sample::Vector{Bool}, A::Array{Float64}, V::Ar
     for i::UInt16 in 2:params.N-1 #bulk
         MPS*=A[:,:,2-sample[i]]
     end
-    MPS*= V[:,2-sample[N]] #right boundary
+    MPS*= V[:,2-sample[params.N]] #right boundary
     return MPS::Float64
 end
 
@@ -41,22 +41,22 @@ end
 #Claculates the matrix of all derivatives of all elements of the tensor : 
 #function open_derv_MPS(params::parameters, sample::Vector{Bool}, L_set::Vector{Matrix{Float64}}, R_set::Vector{Matrix{Float64}})
 function ∂fMPS(params::parameters, sample::Vector{Bool}, L_set, R_set::Vector{Matrix{Float64}})
-    ∇_bulk::Array{Float64,3}=zeros(Float64, params.χ, params.χ, 2)
-    ∇_boundary::Array{Float64,2}=zeros(Float64, params.χ, 2)
+    ∂_bulk::Array{Float64,3}=zeros(Float64, params.χ, params.χ, 2)
+    ∂_boundary::Array{Float64,2}=zeros(Float64, params.χ, 2)
     for m::UInt16 in 2:params.N-1
         #B = L_set[m]*R_set[params.N+1-m]
         for i::UInt8 in 1:params.χ
             for j::UInt8 in 1:params.χ 
-                @inbounds ∇_bulk[i,j,2-sample[m]] += L_set[m-1][i]*R_set[params.N-m][j] #B[j,i] # + B[i,j]
+                @inbounds ∂_bulk[i,j,2-sample[m]] += L_set[m-1][i]*R_set[params.N-m][j] #B[j,i] # + B[i,j]
             end
-            #@inbounds ∇[i,i,:]./=2
+            #@inbounds ∂[i,i,:]./=2
         end
     end
     for i::UInt8 in 1:params.χ
-        ∇_boundary[i,2-sample[1]] += R_set[params.N-1][i]
-        ∇_boundary[i,2-sample[params.N]] += L_set[params.N-1][i]
+        ∂_boundary[i,2-sample[1]] += R_set[params.N-1][i]
+        ∂_boundary[i,2-sample[params.N]] += L_set[params.N-1][i]
     end
-    return ∇_bulk, ∇_boundary
+    return ∂_bulk, ∂_boundary
 end
 
 

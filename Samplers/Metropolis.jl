@@ -141,7 +141,6 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::Vector{Bool}, A
     return sample, L_set::Vector{Matrix{Float64}}, acc
 end
 
-
 function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
     acc::UInt16=0
     R_set = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
@@ -155,7 +154,8 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A:
         sample_p = deepcopy(sample) #deepcopy necessary?
         sample_p[i] = 1-sample[i]
 
-        P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
+        #P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
+        P = tr(L_set[i]*A[:,:,dINDEX2[sample_p[i]]]*R_set[params.N+1-i])
         #println(C)
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         #println(metropolis_prob)
@@ -172,10 +172,10 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A:
     return sample, R_set::Vector{Matrix{Float64}}, acc
 end
 
-function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Double64}, L_set::Vector{Matrix{Double64}})
+function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
     acc::UInt16=0
-    R_set = [ Matrix{Double64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    R = Matrix{Double64}(I, params.χ, params.χ)
+    R_set = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    R = Matrix{ComplexF64}(I, params.χ, params.χ)
     R_set[1] = R
     #display(L_set[params.N+1])
     #error()
@@ -185,7 +185,8 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A:
         sample_p = deepcopy(sample) #deepcopy necessary?
         sample_p[i] = 1-sample[i]
 
-        P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
+        #P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
+        P = tr(L_set[i]*A[:,:,dINDEX2[sample_p[i]]]*R_set[params.N+1-i])
         #println(C)
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         #println(metropolis_prob)
@@ -195,14 +196,16 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A:
             acc+=1
         end
 
-        R = A[:,:,2-sample[i]]*R
+        #R = A[:,:,2-sample[i]]*R
+        R = A[:,:,dINDEX2[sample[i]]]*R
         R_set[params.N+2-i] = R
         C = tr(L_set[i]*R)
     end
-    return sample, R_set::Vector{Matrix{Double64}}, acc
+    return sample, R_set::Vector{Matrix{ComplexF64}}, acc
 end
 
-function Metropolis_burn_in(p::parameters, A::Array{Double64})
+
+function Metropolis_burn_in(p::parameters, A::Array{Float64})
     
     # Initialize random sample and calculate L_set for that sample:
     sample = rand(Bool, p.N)
@@ -217,7 +220,7 @@ function Metropolis_burn_in(p::parameters, A::Array{Double64})
     return sample, L_set
 end
 
-function Metropolis_burn_in(p::parameters, A::Array{Float64})
+function Metropolis_burn_in(p::parameters, A::Array{ComplexF64})
     
     # Initialize random sample and calculate L_set for that sample:
     sample = rand(Bool, p.N)

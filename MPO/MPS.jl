@@ -14,6 +14,7 @@ function L_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Float6
     MPS=Matrix{Float64}(I, params.χ, params.χ)
     L = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     L[1] = copy(MPS)
+    #display(MPS)
     for i::UInt16 in 1:params.N
         MPS *= A[:,:,2-sample[i]]
         L[i+1] = copy(MPS)
@@ -75,7 +76,7 @@ function MPS(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
     end
     return tr(MPS)::ComplexF64
 end
-
+"""
 #Left strings of MPSs:
 function L_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
     MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
@@ -87,6 +88,7 @@ function L_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Comple
     end
     return L
 end
+"""
 
 #Right strings of MPSs:
 function R_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
