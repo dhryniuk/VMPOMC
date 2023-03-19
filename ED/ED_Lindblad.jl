@@ -1,5 +1,6 @@
 export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm, DQIM, own_version_DQIM, own_z_magnetization, own_x_magnetization, construct_vec_density_matrix_basis, ED_z_magnetization, ED_x_magnetization, calculate_purity, calculate_Renyi_entropy
 export ED_magnetization, long_range_DQIM, sparse_DQIM, sparse_long_range_DQIM, eigen_sparse, von_Neumann_entropy
+export make_two_body_Lindblad_Hamiltonian
 
 function eigen_sparse(x)
     decomp, history = partialschur(x, nev=1, which=LR()); # only solve for the ground state
@@ -23,10 +24,23 @@ spsz = sparse(sz)
 spsp = sparse(sp)
 spsm = sparse(sm)
 
-function make_one_body_Lindbladian(H, Γ)
-    L_H = -1im*(H⊗id - id⊗transpose(H))
+function make_one_body_Lindbladian(params::parameters, H, Γ)
+    L_H = -1im*params.h*(H⊗id - id⊗transpose(H))
     L_D = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
-    return L_H + L_D
+    return L_H + params.γ*L_D
+end
+
+function make_two_body_Lindblad_Hamiltonian(A, B)
+    L_H = -1im*( (A⊗id)⊗(B⊗id) - (id⊗transpose(A))⊗(id⊗transpose(B)) )
+    return L_H
+end
+
+export alt_make_two_body_Lindblad_Hamiltonian
+function alt_make_two_body_Lindblad_Hamiltonian(A, B)
+    ID = id⊗id
+    H = A⊗B
+    L_H = -1im*(H⊗ID - ID⊗transpose(H))
+    return L_H
 end
 
 function TransverseFieldIsing(;N,h)

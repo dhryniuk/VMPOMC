@@ -31,43 +31,52 @@ function MPO_string(sample::density_matrix, A::Array{ComplexF64},l,r)
     return MPO
 end
 
+#export L_MPO_strings, R_MPO_strings
+
 #Left strings of MPOs:
 function L_MPO_strings(params::parameters, sample::density_matrix, A::Array{ComplexF64})
-    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    MPO::Matrix{ComplexF64} = Matrix{ComplexF64}(I, params.χ, params.χ)
     #L = Vector{Matrix{ComplexF64}}()
     #push!(L,copy(MPO))
-    L = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    L[1] = copy(MPO)    ### IT SEEMS COPY IS VERY IMPORTANT!
+    L::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    #L[1] = copy(MPO)    ### IT SEEMS COPY IS VERY IMPORTANT!
+    L[1] = MPO
     for i::UInt8 in 1:params.N
-        MPO *= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
+        #MPO *= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
+        MPO *= A[:,:,1+2*sample.ket[i]+sample.bra[i]]
         #MPO*=A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample.bra[i]]]
         #push!(L,copy(MPO))
-        L[i+1] = copy(MPO)
+        #L[i+1] = copy(MPO)
+        L[i+1] = MPO
     end
     return L
 end
 
 #Right strings of MPOs:
 function R_MPO_strings(params::parameters, sample::density_matrix, A::Array{ComplexF64})
-    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    MPO::Matrix{ComplexF64} = Matrix{ComplexF64}(I, params.χ, params.χ)
     #R = Vector{Matrix{ComplexF64}}()
     #push!(R,copy(MPO))
-    R = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    R[1] = copy(MPO) 
+    R::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    #R[1] = copy(MPO) 
+    R[1] = MPO
     for i::UInt8 in params.N:-1:1
-        MPO = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*MPO
+        #MPO = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*MPO
+        MPO = A[:,:,1+2*sample.ket[i]+sample.bra[i]]*MPO
 
         # MATRIX MULTIPLICATION IS NOT COMMUTATIVE, IDIOT
 
         #push!(R,copy(MPO))
-        R[params.N+2-i] = copy(MPO)
+        #R[params.N+2-i] = copy(MPO)
+        R[params.N+2-i] = MPO
     end
     return R
 end
 
 function normalize_MPO(params::parameters, A::Array{ComplexF64})
-    MPO=(A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]])^params.N
-    return tr(MPO)^(1/params.N)#::ComplexF64
+    #MPO=(A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]])^params.N
+    MPO=(A[:,:,1]+A[:,:,4])^params.N
+    return A./=tr(MPO)^(1/params.N)#::ComplexF64
 end
 
 function hermetize_MPO(params::parameters, A::Array{ComplexF64})
@@ -88,7 +97,24 @@ function B_list(m, sample::density_matrix, A::Array{ComplexF64}) #FIX m ORDERING
     return B_list
 end
 
-function derv_MPO(params::parameters, sample::density_matrix, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+function ∂MPO(params::parameters, sample::density_matrix, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+    ∂::Array{ComplexF64,3}=zeros(ComplexF64, params.χ, params.χ, 4)
+    #L_set = L_MPO_strings(sample, A)
+    #R_set = R_MPO_strings(sample, A)
+    for m::UInt8 in 1:params.N
+        B = R_set[params.N+1-m]*L_set[m]
+        for i::UInt8 in 1:params.χ
+            for j::UInt8 in 1:params.χ
+                #@inbounds ∂[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += B[j,i] # + B[i,j]
+                @inbounds ∂[i,j,1+2*sample.ket[m]+sample.bra[m]] += B[j,i] # + B[i,j]
+            end
+            #@inbounds ∂[i,i,:]./=2
+        end
+    end
+    return ∂
+end
+
+function derv_MPO(params::parameters, sample_ket::Array{Bool}, sample_bra::Array{Bool}, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
     ∇=zeros(ComplexF64, params.χ, params.χ,4)
     #L_set = L_MPO_strings(sample, A)
     #R_set = R_MPO_strings(sample, A)
@@ -96,7 +122,7 @@ function derv_MPO(params::parameters, sample::density_matrix, L_set::Vector{Matr
         B = R_set[params.N+1-m]*L_set[m]
         for i::UInt8 in 1:params.χ
             for j::UInt8 in 1:params.χ
-                @inbounds ∇[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += B[j,i] # + B[i,j]
+                @inbounds ∇[i,j,dINDEX[(sample_ket[m],sample_bra[m])]] += B[j,i] # + B[i,j]
             end
             #@inbounds ∇[i,i,:]./=2
         end
@@ -203,6 +229,86 @@ function tp_across_3(A::Array{ComplexF64})
     @tensor B[a,b,u,v] = A[a,b,f,e]*A[u,v,e,f]
     #return @tensor B[a,b,u,v]*B[b,a,v,u] #N=2
     return @tensor B[a,c,u,d]*B[c,b,d,v]*B[b,a,v,u] #N=3
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#vectorized samples version:
+
+function MPO(params::parameters, sample_ket::Array{Bool}, sample_bra::Array{Bool}, A::Array{ComplexF64})
+    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    for i in 1:params.N
+        MPO*=A[:,:,dINDEX[(sample_ket[i],sample_bra[i])]]
+    end
+    return tr(MPO)::ComplexF64
+end
+
+#MPO string beginning as site l and ending at site r:
+function MPO_string(sample_ket::Array{Bool}, sample_bra::Array{Bool}, A::Array{ComplexF64},l,r)
+    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    for i in l:r
+        MPO*=A[:,:,dINDEX2[sample_ket[i]],dINDEX2[sample_bra[i]]]
+    end
+    return MPO
+end
+
+#Left strings of MPOs:
+function L_MPO_strings(params::parameters, sample_ket::Array{Bool}, sample_bra::Array{Bool}, A::Array{ComplexF64})
+    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    #L = Vector{Matrix{ComplexF64}}()
+    #push!(L,copy(MPO))
+    L = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    L[1] = copy(MPO)    ### IT SEEMS COPY IS VERY IMPORTANT!
+    for i::UInt8 in 1:params.N
+        MPO *= A[:,:,dINDEX[(sample_ket[i],sample_bra[i])]]
+        #MPO*=A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample.bra[i]]]
+        #push!(L,copy(MPO))
+        L[i+1] = copy(MPO)
+    end
+    return L
+end
+
+#Right strings of MPOs:
+function R_MPO_strings(params::parameters, sample_ket::Array{Bool}, sample_bra::Array{Bool}, A::Array{ComplexF64})
+    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    #R = Vector{Matrix{ComplexF64}}()
+    #push!(R,copy(MPO))
+    R = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    R[1] = copy(MPO) 
+    for i::UInt8 in params.N:-1:1
+        MPO = A[:,:,dINDEX[(sample_ket[i],sample_bra[i])]]*MPO
+
+        # MATRIX MULTIPLICATION IS NOT COMMUTATIVE, IDIOT
+
+        #push!(R,copy(MPO))
+        R[params.N+2-i] = copy(MPO)
+    end
+    return R
 end
 
 

@@ -14,7 +14,7 @@ function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::
     end
     return energy
 end
-"""
+
 function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::UInt16, h1::Matrix, A::Array, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
     energy::ComplexF64 = 0
     s = dVEC2[sample[j]]
@@ -27,7 +27,7 @@ function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::
     end
     return energy::ComplexF64
 end
-"""
+
 
 function Ising_interaction_energy(params::parameters, sample::Vector{Bool}, boundary_conditions)
     energy=0

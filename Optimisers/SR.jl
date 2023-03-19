@@ -170,7 +170,7 @@ function SR_calculate_MC_gradient_full(p::parameters, A::Array{ComplexF64}, l1::
 
                     micro_L_set = L_MPO_strings(p, micro_sample, A)
                     micro_R_set = R_MPO_strings(p, micro_sample, A)
-                    local_∇L+= loc*derv_MPO(p, micro_sample, micro_L_set, micro_R_set)
+                    local_∇L+= loc*∂MPO(p, micro_sample, micro_L_set, micro_R_set)
                 end
             end
 
@@ -187,7 +187,7 @@ function SR_calculate_MC_gradient_full(p::parameters, A::Array{ComplexF64}, l1::
         local_L /=ρ_sample
         local_∇L/=ρ_sample
 
-        Δ_MPO_sample = derv_MPO(p, sample, L_set, R_set)/ρ_sample
+        Δ_MPO_sample = ∂MPO(p, sample, L_set, R_set)/ρ_sample
 
         #Add in interaction terms:
         local_L +=l_int
