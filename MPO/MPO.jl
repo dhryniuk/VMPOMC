@@ -38,7 +38,12 @@ function L_MPO_strings(params::parameters, sample::density_matrix, A::Array{Comp
     MPO::Matrix{ComplexF64} = Matrix{ComplexF64}(I, params.χ, params.χ)
     #L = Vector{Matrix{ComplexF64}}()
     #push!(L,copy(MPO))
+
+
+    # CONSIDER REMOVING PREALLOCATION:
     L::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    
+    
     #L[1] = copy(MPO)    ### IT SEEMS COPY IS VERY IMPORTANT!
     L[1] = MPO
     for i::UInt8 in 1:params.N
@@ -73,6 +78,29 @@ function R_MPO_strings(params::parameters, sample::density_matrix, A::Array{Comp
     return R
 end
 
+#Left strings of MPOs:
+function L_MPO_strings_without_preallocation(L::Vector{Matrix{ComplexF64}}, AUX_ID::Matrix{ComplexF64}, params::parameters, sample::density_matrix, A::Array{ComplexF64})
+    #L[1] = Matrix{ComplexF64}(I, params.χ, params.χ)
+    L[1] = AUX_ID
+    for i::UInt8 in 1:params.N
+        idx = 1+2*sample.ket[i]+sample.bra[i]
+        mul!(L[i+1],L[i],@view(A[:,:,idx]))
+    end
+    return L
+end
+
+#Right strings of MPOs:
+function R_MPO_strings_without_preallocation(R::Vector{Matrix{ComplexF64}}, AUX_ID::Matrix{ComplexF64}, params::parameters, sample::density_matrix, A::Array{ComplexF64})
+    #R[1] = Matrix{ComplexF64}(I, params.χ, params.χ)
+    R[1] = AUX_ID
+    for i::UInt8 in params.N:-1:1
+        idx = 1+2*sample.ket[i]+sample.bra[i]
+        mul!(R[params.N+2-i],@view(A[:,:,idx]),R[params.N+1-i])
+    end
+    return R
+end
+
+
 function normalize_MPO(params::parameters, A::Array{ComplexF64})
     #MPO=(A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]])^params.N
     MPO=(A[:,:,1]+A[:,:,4])^params.N
@@ -101,14 +129,29 @@ function ∂MPO(params::parameters, sample::density_matrix, L_set::Vector{Matrix
     ∂::Array{ComplexF64,3}=zeros(ComplexF64, params.χ, params.χ, 4)
     #L_set = L_MPO_strings(sample, A)
     #R_set = R_MPO_strings(sample, A)
+    B::Matrix{ComplexF64} = zeros(params.χ,params.χ)
     for m::UInt8 in 1:params.N
-        B = R_set[params.N+1-m]*L_set[m]
+        #B = R_set[params.N+1-m]*L_set[m]
+        mul!(B,R_set[params.N+1-m],L_set[m])
         for i::UInt8 in 1:params.χ
             for j::UInt8 in 1:params.χ
                 #@inbounds ∂[i,j,dINDEX[(sample.ket[m],sample.bra[m])]] += B[j,i] # + B[i,j]
                 @inbounds ∂[i,j,1+2*sample.ket[m]+sample.bra[m]] += B[j,i] # + B[i,j]
             end
             #@inbounds ∂[i,i,:]./=2
+        end
+    end
+    return ∂
+end
+
+function ∂MPO_without_preallocation(B::Matrix{ComplexF64}, params::parameters, sample::density_matrix, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+    ∂::Array{ComplexF64,3}=zeros(ComplexF64, params.χ, params.χ, 4)
+    for m::UInt8 in 1:params.N
+        mul!(B,R_set[params.N+1-m],L_set[m])
+        for i::UInt8 in 1:params.χ
+            for j::UInt8 in 1:params.χ
+                @inbounds ∂[i,j,1+2*sample.ket[m]+sample.bra[m]] += B[j,i]
+            end
         end
     end
     return ∂
@@ -158,6 +201,21 @@ function calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
     return tr(mp)
 end
 
+export tensor_calculate_z_magnetization
+
+function tensor_calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
+    A=reshape(A,params.χ,params.χ,2,2)
+    B=zeros(ComplexF64,params.χ,params.χ)
+    D=zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b]=A[a,b,c,d]*sz[c,d]
+    C=deepcopy(B)
+    for _ in 1:params.N-1
+        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
+        C=deepcopy(D)
+    end
+    return @tensor C[a,a]
+end
+
 function double_bond_dimension(params::parameters, A::Array{ComplexF64})
     params.χ*=2
     new_A = Array{ComplexF64}(undef, params.χ,params.χ,4)#2,2)
@@ -185,6 +243,29 @@ function increase_bond_dimension(params::parameters, A::Array{ComplexF64}, step:
     end
     new_A./=normalize_MPO(MPOMC.params, new_A)
     return new_A
+end
+
+export calculate_spin_spin_correlation
+
+function calculate_spin_spin_correlation(params::parameters, A::Array{ComplexF64}, op, dist::Int)
+    A=reshape(A,params.χ,params.χ,2,2)
+    B=zeros(ComplexF64,params.χ,params.χ)
+    D=zeros(ComplexF64,params.χ,params.χ)
+    E=zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b] = A[a,b,f,e]*op[e,f]#conj(A[a,b,e,f])*A[u,v,e,f]
+    @tensor D[a,b] = A[a,b,f,f]
+    C=deepcopy(B)
+    for _ in 1:dist-1
+        @tensor E[a,b] = C[a,c]*D[c,b]
+        C=deepcopy(E)
+    end
+    @tensor E[a,b] = C[a,c]*B[c,b]
+    C=deepcopy(E)
+    for _ in 1:params.N-1-dist
+        @tensor E[a,b] = C[a,c]*D[c,b]
+        C=deepcopy(E)
+    end
+    return @tensor C[a,a]
 end
 
 function calculate_purity(params::parameters, A::Array{ComplexF64})

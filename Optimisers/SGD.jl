@@ -797,3 +797,170 @@ function calculate_open_MPO_gradient(params::parameters, A::Array{ComplexF64}, V
     #return (L∇L-ΔLL)/Z, real(mean_local_Lindbladian)
     return (L∇L_bulk-ΔLL_bulk)/Z, (L∇L_boundary-ΔLL_boundary)/Z, mean_local_Lindbladian
 end
+
+
+
+
+
+
+
+
+
+
+
+export boundary_driven_XXZ
+
+function calculate_open_MPO_gradient(params::parameters, A::Array{ComplexF64}, V::Array{ComplexF64}, l1::Matrix{ComplexF64}, basis)
+    L∇L_bulk=zeros(ComplexF64,params.χ,params.χ,4) #coupled product
+    ΔLL_bulk=zeros(ComplexF64,params.χ,params.χ,4) #uncoupled product
+    L∇L_boundary=zeros(ComplexF64,params.χ,4) #coupled product
+    ΔLL_boundary=zeros(ComplexF64,params.χ,4) #uncoupled product
+    Z=0
+
+    mean_local_Lindbladian = 0
+
+    for k in 1:params.dim
+        for l in 1:params.dim
+            sample = density_matrix(1,basis[k],basis[l])
+            L_set = open_L_MPO_strings(params, sample, A, V)
+            R_set = open_R_MPO_strings(params, sample, A, V)
+            ρ_sample = L_set[params.N-1]*R_set[1]
+            p_sample = ρ_sample*conj(ρ_sample)
+            Z+=p_sample
+
+            local_L=0
+            local_∇L_bulk=zeros(ComplexF64,params.χ,params.χ,4)
+            local_∇L_boundary=zeros(ComplexF64,params.χ,4)
+            l_int = 0
+
+            L = [ transpose(Vector{ComplexF64}(undef,params.χ)) for _ in 1:params.N-1 ]
+
+            #L∇L*:
+
+
+            #left boundary:
+            #1-local part:
+            s = dVEC[(sample.ket[1],sample.bra[1])]
+            #bra_L = transpose(s)*l1
+            bra_L = transpose(s)*conj(l1)
+            for i in 1:4
+                loc = bra_L[i]
+                if loc!=0
+                    state = TPSC[i]
+
+                    local_L += loc*transpose(V[:,dINDEX[(state[1],state[2])]])*R_set[params.N-1]
+                    micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
+                    micro_sample.ket[1] = state[1]
+                    micro_sample.bra[1] = state[2]
+                    
+                    micro_L_set = open_L_MPO_strings(params, micro_sample, A, V)
+                    micro_R_set = open_R_MPO_strings(params, micro_sample, A, V)
+                    #display( open_derv_MPO(params, micro_sample,micro_L_set,micro_R_set))
+                    #println(typeof(open_derv_MPO(params, micro_sample,micro_L_set,micro_R_set)))
+                    ∇bulk, ∇boundary = open_derv_MPO(params, micro_sample,micro_L_set,micro_R_set)
+                    local_∇L_bulk+=loc*∇bulk
+                    local_∇L_boundary+=loc*∇boundary
+                end
+            end
+
+            #Interaction term:
+            l_int_α = (2*sample.ket[1]-1)*(2*sample.ket[2]-1)
+            l_int_β = (2*sample.bra[1]-1)*(2*sample.bra[2]-1)
+            l_int += 1.0im*params.J*(l_int_α-l_int_β)
+
+            #Update L_set:
+            L=transpose(V[:,dINDEX[(sample.ket[1],sample.bra[1])]])
+            L_set[1] = copy(L)
+
+
+            #bulk:
+            for j in 2:params.N-1
+
+                #1-local part:
+                s = dVEC[(sample.ket[j],sample.bra[j])]
+                #bra_L = transpose(s)*l1
+                bra_L = transpose(s)*conj(l1)
+                for i in 1:4
+                    loc = bra_L[i]
+                    if loc!=0
+                        state = TPSC[i]
+                        local_L += loc*L_set[j-1]*A[:,:,dINDEX[(state[1],state[2])]]*R_set[params.N-j]
+                        micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
+                        micro_sample.ket[j] = state[1]
+                        micro_sample.bra[j] = state[2]
+                        
+                        micro_L_set = open_L_MPO_strings(params, micro_sample, A, V)
+                        micro_R_set = open_R_MPO_strings(params, micro_sample, A, V)
+                        ∇bulk, ∇boundary = open_derv_MPO(params, micro_sample,micro_L_set,micro_R_set)
+                        local_∇L_bulk+=loc*∇bulk
+                        local_∇L_boundary+=loc*∇boundary
+                    end
+                end
+
+                #2-local part:
+                l_int_α = (2*sample.ket[j]-1)*(2*sample.ket[mod(j-2,params.N)+1]-1)
+                l_int_β = (2*sample.bra[j]-1)*(2*sample.bra[mod(j-2,params.N)+1]-1)
+                #l_int += -1.0im*J*(l_int_α-l_int_β)
+                l_int += 1.0im*params.J*(l_int_α-l_int_β)
+
+                #Update L_set:
+                L*=A[:,:,dINDEX[(sample.ket[j],sample.bra[j])]]
+                L_set[j] = copy(L)
+            end
+
+            #right boundary:
+            s = dVEC[(sample.ket[params.N],sample.bra[params.N])]
+            #bra_L = transpose(s)*l1
+            bra_L = transpose(s)*conj(l1)
+            for i in 1:4
+                loc = bra_L[i]
+                if loc!=0
+                    state = TPSC[i]
+
+                    local_L += loc*L_set[params.N-1]*V[:,dINDEX[(state[1],state[2])]]
+                    micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
+                    micro_sample.ket[params.N] = state[1]
+                    micro_sample.bra[params.N] = state[2]
+                    
+                    micro_L_set = open_L_MPO_strings(params, micro_sample, A, V)
+                    micro_R_set = open_R_MPO_strings(params, micro_sample, A, V)
+                    ∇bulk, ∇boundary = open_derv_MPO(params, micro_sample,micro_L_set,micro_R_set)
+                    local_∇L_bulk+=loc*∇bulk
+                    local_∇L_boundary+=loc*∇boundary
+                end
+            end
+
+            local_L /=ρ_sample
+            local_∇L_bulk/=ρ_sample
+            local_∇L_boundary/=ρ_sample
+
+            #Add in interaction terms:
+            local_L += l_int
+
+            Δ_bulk_sample, Δ_boundary_sample = open_derv_MPO(params, sample, L_set, R_set)./ρ_sample
+
+            #L∇L:
+            local_∇L_bulk+=l_int*Δ_bulk_sample
+            L∇L_bulk+=p_sample*local_L*conj(local_∇L_bulk)
+
+            local_∇L_boundary+=l_int*Δ_boundary_sample
+            L∇L_boundary+=p_sample*local_L*conj(local_∇L_boundary)
+    
+            #ΔLL:
+            local_Δ_bulk=p_sample*conj(Δ_bulk_sample)
+            ΔLL_bulk+=local_Δ_bulk
+
+            local_Δ_boundary=p_sample*conj(Δ_boundary_sample)
+            ΔLL_boundary+=local_Δ_boundary
+    
+            #Mean local Lindbladian:
+            mean_local_Lindbladian += p_sample*local_L*conj(local_L)
+        end
+    end
+    mean_local_Lindbladian/=Z
+    ΔLL_bulk*=mean_local_Lindbladian
+    ΔLL_boundary*=mean_local_Lindbladian
+
+    #return (L∇L-ΔLL)/Z, real(mean_local_Lindbladian)
+    return (L∇L_bulk-ΔLL_bulk)/Z, (L∇L_boundary-ΔLL_boundary)/Z, mean_local_Lindbladian
+end

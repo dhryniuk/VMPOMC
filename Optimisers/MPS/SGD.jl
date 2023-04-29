@@ -27,7 +27,7 @@ function SGD_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1
         #L∇L*:
         for j::UInt16 in 1:params.N
             #1-local part (field):
-            e_field -= one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
+            e_field += one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
 
             #Update L_set:
             L*=A[:,:,dINDEX2[sample[j]]]
@@ -55,7 +55,7 @@ function SGD_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1
     mean_local_Hamiltonian/=N_MC
     ΔLL*=mean_local_Hamiltonian
 
-    return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian
+    return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian, acceptance/(N_MC*params.N)
 end
 
 function SGD_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64, h1::Matrix)
@@ -85,7 +85,7 @@ function SGD_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64,
         #L∇L*:
         for j in 1:params.N
             #1-local part (field):
-            e_field -= one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
+            e_field += one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
 
             #Update L_set:
             L*=A[:,:,dINDEX2[sample[j]]]
@@ -113,5 +113,5 @@ function SGD_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64,
     mean_local_Hamiltonian/=N_MC
     ΔLL*=mean_local_Hamiltonian
 
-    return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian
+    return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian, acceptance/(N_MC*params.N)
 end

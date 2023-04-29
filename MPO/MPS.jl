@@ -62,6 +62,40 @@ function normalize_MPS(params::parameters, A::Array{Float64})
     return A./norm^(1/(2*params.N))
 end
 
+function norm_MPS(params::parameters, A::Array{Float64})
+    B=rand(Float64,params.χ,params.χ,params.χ,params.χ)
+    @tensor B[a,b,u,v] = A[a,b,e]*A[u,v,e]#conj(A[a,b,e,f])*A[u,v,e,f]
+    C=deepcopy(B)
+    for _ in 1:params.N-1
+        @tensor C[a,b,u,v] = C[a,c,u,d]*B[c,b,d,v]
+    end
+    norm = @tensor C[a,a,u,u]
+    return norm
+end
+
+export op_exp_val_MPS
+function op_exp_val_MPS(op, j, params::parameters, A::Array{Float64})
+    B=zeros(Float64,params.χ,params.χ,params.χ,params.χ)
+    @tensor B[a,b,u,v] = A[a,b,e]*op[e,f]*conj(A[u,v,f])#conj(A[a,b,e,f])*A[u,v,e,f]
+    C=deepcopy(B)
+    for _ in 1:params.N-1
+        @tensor C[a,b,u,v] = C[a,c,u,d]*B[c,b,d,v]
+        #B=C
+    end
+    exp_val = @tensor C[a,a,u,u]
+    return exp_val/norm_MPS(params,A)
+end
+
+export make_wavefunction_MPS
+function make_wavefunction_MPS(params::parameters, A::Array{Float64}, basis)
+    Ψ=zeros(length(basis))
+    for (i, state) in enumerate(basis)
+        Ψ[i] = MPS(params,state,A)
+    end
+    return Ψ
+end
+
+
 
 
 
