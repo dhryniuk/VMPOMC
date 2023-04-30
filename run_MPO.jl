@@ -68,7 +68,7 @@ F=0.9
         end
 
         #L = calculate_mean_local_Lindbladian(MPOMC.params, l1, A, basis)
-        println("k=$k: ", real(L), " ; acc_rate=", round(acc,sigdigits=2))
+        println("k=$k: ", real(L), " ; acc_rate=", round(acc*100,sigdigits=2), "%")
         #global old_L = L
 
         #ss = calculate_spin_spin_correlation(MPOMC.params,A,sz,1)

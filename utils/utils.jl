@@ -3,13 +3,13 @@ export make_density_matrix, adaptive_step_size
 export dINDEX
 
 #Useful dictionaries:
-dREVINDEX = Dict(1 => (0,0), 2 => (0,1), 3 => (1,0), 4 => (1,1))
-dINDEX = Dict((0,0) => 1, (0,1) => 2, (1,0) => 3, (1,1) => 4)
+dREVINDEX::Dict{Int8,Tuple{Bool,Bool}} = Dict(1 => (0,0), 2 => (0,1), 3 => (1,0), 4 => (1,1))
+dINDEX::Dict{Tuple{Bool,Bool},Int8} = Dict((0,0) => 1, (0,1) => 2, (1,0) => 3, (1,1) => 4)
 function dINDEXf(b::Bool, k::Bool)
     return 1+2*b+k
 end
 dVEC =   Dict((0,0) => [1,0,0,0], (0,1) => [0,1,0,0], (1,0) => [0,0,1,0], (1,1) => [0,0,0,1])
-dVEC_transpose = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
+dVEC_transpose::Dict{Tuple{Bool,Bool},Matrix{ComplexF64}} = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
 dUNVEC = Dict([1,0,0,0] => (0,0), [0,1,0,0] => (0,1), [0,0,1,0] => (1,0), [0,0,0,1] => (1,1))
 TPSC::Vector{Tuple{Bool,Bool}} = [(0,0),(0,1),(1,0),(1,1)]
 #TPSC = [(0,0),(1,0),(0,1),(1,1)]
@@ -98,4 +98,19 @@ function set_parameters(N,χ,J,h,γ,α,burn_in)
     params.γ = γ;
     params.α = α;
     params.burn_in = burn_in;
+end
+
+mutable struct workspace
+    micro_L_set::Vector{Matrix{ComplexF64}}
+    micro_R_set::Vector{Matrix{ComplexF64}}
+    plus_S::Array{ComplexF64,2}
+    B::Matrix{ComplexF64}
+    ID::Matrix{ComplexF64}
+    loc_1::Matrix{ComplexF64}
+    loc_2::Matrix{ComplexF64}
+    Metro_1::Matrix{ComplexF64}
+    Metro_2::Matrix{ComplexF64}
+    C_mat::Matrix{ComplexF64}
+    bra_L::Matrix{ComplexF64}
+    Δ_MPO_sample::Array{ComplexF64,3}
 end

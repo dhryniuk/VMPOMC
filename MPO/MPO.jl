@@ -79,25 +79,25 @@ function R_MPO_strings(params::parameters, sample::density_matrix, A::Array{Comp
 end
 
 #Left strings of MPOs:
-function L_MPO_strings_without_preallocation(L::Vector{Matrix{ComplexF64}}, AUX_ID::Matrix{ComplexF64}, params::parameters, sample::density_matrix, A::Array{ComplexF64})
+function L_MPO_strings_without_preallocation(AUX::workspace, params::parameters, sample::density_matrix, A::Array{ComplexF64})
     #L[1] = Matrix{ComplexF64}(I, params.χ, params.χ)
-    L[1] = AUX_ID
+    AUX.micro_L_set[1] = AUX.ID
     for i::UInt8 in 1:params.N
         idx = 1+2*sample.ket[i]+sample.bra[i]
-        mul!(L[i+1],L[i],@view(A[:,:,idx]))
+        mul!(AUX.micro_L_set[i+1], AUX.micro_L_set[i], @view(A[:,:,idx]))
     end
-    return L
+    return AUX.micro_L_set
 end
 
 #Right strings of MPOs:
-function R_MPO_strings_without_preallocation(R::Vector{Matrix{ComplexF64}}, AUX_ID::Matrix{ComplexF64}, params::parameters, sample::density_matrix, A::Array{ComplexF64})
+function R_MPO_strings_without_preallocation(AUX::workspace, params::parameters, sample::density_matrix, A::Array{ComplexF64})
     #R[1] = Matrix{ComplexF64}(I, params.χ, params.χ)
-    R[1] = AUX_ID
+    AUX.micro_R_set[1] = AUX.ID
     for i::UInt8 in params.N:-1:1
         idx = 1+2*sample.ket[i]+sample.bra[i]
-        mul!(R[params.N+2-i],@view(A[:,:,idx]),R[params.N+1-i])
+        mul!(AUX.micro_R_set[params.N+2-i], @view(A[:,:,idx]), AUX.micro_R_set[params.N+1-i])
     end
-    return R
+    return AUX.micro_R_set
 end
 
 
@@ -144,13 +144,13 @@ function ∂MPO(params::parameters, sample::density_matrix, L_set::Vector{Matrix
     return ∂
 end
 
-function ∂MPO_without_preallocation(B::Matrix{ComplexF64}, params::parameters, sample::density_matrix, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+function ∂MPO_without_preallocation(AUX::workspace, params::parameters, sample::density_matrix, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
     ∂::Array{ComplexF64,3}=zeros(ComplexF64, params.χ, params.χ, 4)
     for m::UInt8 in 1:params.N
-        mul!(B,R_set[params.N+1-m],L_set[m])
+        mul!(AUX.B,R_set[params.N+1-m],L_set[m])
         for i::UInt8 in 1:params.χ
             for j::UInt8 in 1:params.χ
-                @inbounds ∂[i,j,1+2*sample.ket[m]+sample.bra[m]] += B[j,i]
+                @inbounds ∂[i,j,1+2*sample.ket[m]+sample.bra[m]] += AUX.B[j,i]
             end
         end
     end

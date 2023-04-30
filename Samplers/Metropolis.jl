@@ -39,43 +39,59 @@ function Dual_Metropolis_sweep(sample::density_matrix, A::Array{ComplexF64}, L_s
     return sample, R_set
 end
 
-function Mono_Metropolis_sweep_left(params::parameters, sample::density_matrix, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
+function Mono_Metropolis_sweep_left(AUX::workspace, params::parameters, sample::density_matrix, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
 
     function draw_excluded(u)
-        v = rand(1:3)
+        v::Int8 = rand(1:3)
         if v>=u
             v+=1
         end
         return v
     end
 
-    R_set = Vector{Matrix{ComplexF64}}(undef,0)
-    #R_set = []
-    R = Matrix{ComplexF64}(I, params.χ, params.χ)
-    push!(R_set, copy(R))
-    C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
-    for i in params.N:-1:1
+    acc=0
 
-        sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
-        u = dINDEX[(sample.ket[i],sample.bra[i])]
-        v = draw_excluded(u)
-        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[v]
-        P = tr(L_set[i]*A[:,:,v]*R_set[params.N+1-i])
+    #R_set = Vector{Matrix{ComplexF64}}(undef,0)
+    #R_set = []
+    #R = Matrix{ComplexF64}(I, params.χ, params.χ)
+    #push!(R_set, copy(R))
+    #C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
+
+    R_set::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef, params.χ, params.χ) for _ in 1:params.N+1 ]
+    R_set[1] = Matrix{ComplexF64}(I, params.χ, params.χ)
+    AUX.C_mat = L_set[params.N+1]
+    C = tr(AUX.C_mat)
+
+    for i::UInt8 in params.N:-1:1
+
+        sample_p = density_matrix(1,copy(sample.ket),copy(sample.bra)) #deepcopy necessary?
+        #u = dINDEX[(sample.ket[i],sample.bra[i])]
+        draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
+        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
+        #P = tr(L_set[i]*A[:,:,v]*R_set[params.N+1-i])
+        mul!(AUX.Metro_1,L_set[i],@view(A[:,:,draw]))
+        mul!(AUX.Metro_2,AUX.Metro_1,R_set[params.N+1-i])
+        P=tr(AUX.Metro_2)
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         if rand() <= metropolis_prob
             #sample = sample_p
-            sample.ket = deepcopy(sample_p.ket)
-            sample.bra = deepcopy(sample_p.bra)
+            sample.ket = copy(sample_p.ket)
+            sample.bra = copy(sample_p.bra)
+            acc+=1
         end
 
         #R = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*R
-        R = A[:,:,1+2*sample.ket[i]+sample.bra[i]]*R
-        push!(R_set, copy(R))
-        C = tr(L_set[i]*R)
+        #R = A[:,:,1+2*sample.ket[i]+sample.bra[i]]*R
+        #push!(R_set, copy(R))
+        #C = tr(L_set[i]*R)
     
-    #    C = tr(L_set[i]*R_set[N+2-i])
+        mul!(R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), R_set[params.N+1-i])
+        mul!(AUX.C_mat, L_set[i], R_set[params.N+2-i])
+        C = tr(AUX.C_mat)
+        #C = tr(L_set[i]*R_set[params.N+2-i])
+
     end
-    return sample, R_set::Vector{Matrix{ComplexF64}}
+    return sample, R_set::Vector{Matrix{ComplexF64}}, acc
 end
 
 function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix, A::Array{ComplexF64}, R_set::Vector{Matrix{ComplexF64}})
@@ -87,6 +103,8 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix,
         end
         return v
     end
+
+    acc = 0
 
     L_set = Vector{Matrix{ComplexF64}}(undef,0)
     L = Matrix{ComplexF64}(I, params.χ, params.χ)
@@ -104,6 +122,7 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix,
             #sample = sample_p
             sample.ket = deepcopy(sample_p.ket)
             sample.bra = deepcopy(sample_p.bra)
+            acc+=1
         end
 
         L*= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
@@ -111,100 +130,10 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix,
         C = tr(L*R_set[params.N+1-i])
 
     end
-    return sample, L_set::Vector{Matrix{ComplexF64}}
+    return sample, L_set::Vector{Matrix{ComplexF64}}, acc
 end
 
-
-function Mono_Metropolis_sweep_right(params::parameters, sample::Vector{Bool}, A::Array{Float64}, R_set::Vector{Matrix{Float64}})
-    acc::UInt16=0
-    L_set = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    L = Matrix{Float64}(I, params.χ, params.χ)
-    L_set[1] = L
-    C = tr(R_set[params.N+1]) #Current MPO  ---> move into loop
-    for i in 1:params.N
-
-        sample_p = deepcopy(sample) #deepcopy necessary?
-        sample_p[i] = 1-sample[i]
-        
-        P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
-        if rand() <= metropolis_prob
-            #sample = sample_p
-            sample = deepcopy(sample_p)
-            acc+=1
-        end
-
-        L *= A[:,:,2-sample[i]]
-        L_set[i] = L
-        C = tr(L*R_set[params.N+1-i])
-
-    end
-    return sample, L_set::Vector{Matrix{Float64}}, acc
-end
-
-function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
-    acc::UInt16=0
-    R_set = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    R = Matrix{Float64}(I, params.χ, params.χ)
-    R_set[1] = R
-    #display(L_set[params.N+1])
-    #error()
-    C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
-    for i in params.N:-1:1
-
-        sample_p = deepcopy(sample) #deepcopy necessary?
-        sample_p[i] = 1-sample[i]
-
-        #P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
-        P = tr(L_set[i]*A[:,:,dINDEX2[sample_p[i]]]*R_set[params.N+1-i])
-        #println(C)
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
-        #println(metropolis_prob)
-        if rand() <= metropolis_prob
-            #sample = sample_p
-            sample = deepcopy(sample_p)
-            acc+=1
-        end
-
-        R = A[:,:,2-sample[i]]*R
-        R_set[params.N+2-i] = R
-        C = tr(L_set[i]*R)
-    end
-    return sample, R_set::Vector{Matrix{Float64}}, acc
-end
-
-function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
-    acc::UInt16=0
-    R_set = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    R = Matrix{ComplexF64}(I, params.χ, params.χ)
-    R_set[1] = R
-    #display(L_set[params.N+1])
-    #error()
-    C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
-    for i in params.N:-1:1
-
-        sample_p = deepcopy(sample) #deepcopy necessary?
-        sample_p[i] = 1-sample[i]
-
-        #P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
-        P = tr(L_set[i]*A[:,:,dINDEX2[sample_p[i]]]*R_set[params.N+1-i])
-        #println(C)
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
-        #println(metropolis_prob)
-        if rand() <= metropolis_prob
-            #sample = sample_p
-            sample = deepcopy(sample_p)
-            acc+=1
-        end
-
-        #R = A[:,:,2-sample[i]]*R
-        R = A[:,:,dINDEX2[sample[i]]]*R
-        R_set[params.N+2-i] = R
-        C = tr(L_set[i]*R)
-    end
-    return sample, R_set::Vector{Matrix{ComplexF64}}, acc
-end
-
+export Metropolis_burn_in
 
 function Metropolis_burn_in(p::parameters, A::Array{Float64,3})
     
@@ -235,6 +164,7 @@ function Metropolis_burn_in(p::parameters, A::Array{ComplexF64,3})
 
     return sample, L_set
 end
+
 
 export MPO_Metropolis_burn_in
 
@@ -332,4 +262,81 @@ function MC_mean_local_Lindbladian(J,A,N_MC)
     end
 
     return mll/N_MC
+end
+
+
+
+
+function reweighted_Mono_Metropolis_sweep_left(β, params::parameters, sample::density_matrix, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
+
+    function draw_excluded(u)
+        v = rand(1:3)
+        if v>=u
+            v+=1
+        end
+        return v
+    end
+
+    acc=0
+
+    R_set = Vector{Matrix{ComplexF64}}(undef,0)
+    #R_set = []
+    R = Matrix{ComplexF64}(I, params.χ, params.χ)
+    push!(R_set, copy(R))
+    C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
+    for i in params.N:-1:1
+
+        sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
+        u = dINDEX[(sample.ket[i],sample.bra[i])]
+        v = draw_excluded(u)
+        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[v]
+        P = tr(L_set[i]*A[:,:,v]*R_set[params.N+1-i])
+        metropolis_prob = real((P*conj(P)))^(β)/real((C*conj(C)))^(β)
+        if rand() <= metropolis_prob
+            #sample = sample_p
+            sample.ket = deepcopy(sample_p.ket)
+            sample.bra = deepcopy(sample_p.bra)
+            acc+=1
+        end
+
+        #R = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*R
+        R = A[:,:,1+2*sample.ket[i]+sample.bra[i]]*R
+        push!(R_set, copy(R))
+        C = tr(L_set[i]*R)
+    
+    #    C = tr(L_set[i]*R_set[N+2-i])
+    end
+    return sample, R_set::Vector{Matrix{ComplexF64}}, acc
+end
+
+
+function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
+    acc::UInt16=0
+    R_set = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
+    R = Matrix{Float64}(I, params.χ, params.χ)
+    R_set[1] = R
+    #display(L_set[params.N+1])
+    #error()
+    C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
+    for i in params.N:-1:1
+
+        sample_p = deepcopy(sample) #deepcopy necessary?
+        sample_p[i] = 1-sample[i]
+
+        #P = tr(L_set[i]*A[:,:,1+sample[i]]*R_set[params.N+1-i])
+        P = tr(L_set[i]*A[:,:,dINDEX2[sample_p[i]]]*R_set[params.N+1-i])
+        #println(C)
+        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        #println(metropolis_prob)
+        if rand() <= metropolis_prob
+            #sample = sample_p
+            sample = deepcopy(sample_p)
+            acc+=1
+        end
+
+        R = A[:,:,2-sample[i]]*R
+        R_set[params.N+2-i] = R
+        C = tr(L_set[i]*R)
+    end
+    return sample, R_set::Vector{Matrix{Float64}}, acc
 end

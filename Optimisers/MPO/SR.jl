@@ -4,12 +4,12 @@ function MPO_flatten_index(i::UInt8,j::UInt8,s::UInt8,params::parameters)
     return i+params.χ*(j-1)+params.χ^2*(s-1)
 end
 
-function sample_update_SR(AUX::Array{ComplexF64,2}, params::parameters, S::Array{ComplexF64,2}, avg_G::Array{ComplexF64}, Δ_MPO_sample::Array{ComplexF64,3})
+function sample_update_SR(AUX::workspace, params::parameters, S::Array{ComplexF64,2}, avg_G::Array{ComplexF64}, Δ_MPO_sample::Array{ComplexF64,3})
     G = reshape(Δ_MPO_sample,4*params.χ^2)
     conj_G = conj(G)
-    avg_G += G
-    mul!(AUX,conj_G,transpose(G))
-    S.+=AUX
+    avg_G.+= G
+    mul!(AUX.plus_S,conj_G,transpose(G))
+    S.+=AUX.plus_S
     #S+=conj_G*transpose(G)
     #for s::UInt8 in 1:4, j::UInt8 in 1:params.χ, i::UInt8 in 1:params.χ, 
     #    ss::UInt8 in 1:4, jj::UInt8 in 1:params.χ, ii::UInt8 in 1:params.χ
@@ -58,17 +58,24 @@ function SR_MPO_gradient(p::parameters, A::Array{ComplexF64}, l1::Matrix{Complex
     Right::Array{ComplexF64} = zeros(ComplexF64,4*params.χ^2)
 
     #Preallocate auxiliary arrays:
-    micro_L_set::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    micro_R_set::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
-    AUX::Array{ComplexF64,2} = zeros(4*params.χ^2,4*params.χ^2)
-    B::Matrix{ComplexF64} = zeros(params.χ,params.χ)
-    AUX_ID::Matrix{ComplexF64} = Matrix{ComplexF64}(I, params.χ, params.χ)
-    AUX_loc_1::Matrix{ComplexF64} = zeros(params.χ,params.χ)
-    AUX_loc_2::Matrix{ComplexF64} = zeros(params.χ,params.χ)
+    AUX = workspace(
+    [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
+    [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
+    zeros(4*params.χ^2,4*params.χ^2),
+    zeros(params.χ,params.χ),
+    Matrix{ComplexF64}(I, params.χ, params.χ),
+    zeros(params.χ,params.χ),
+    zeros(params.χ,params.χ),
+    zeros(params.χ,params.χ),
+    zeros(params.χ,params.χ),
+    zeros(params.χ,params.χ),
+    zeros(ComplexF64, 1, 4),
+    zeros(ComplexF64, params.χ, params.χ, 4)
+    )
 
     for _ in 1:N_MC
 
-        sample, R_set, acc = Mono_Metropolis_sweep_left(params, sample, A, L_set)
+        sample, R_set, acc = Mono_Metropolis_sweep_left(AUX, params, sample, A, L_set)
         acceptance+=acc
         #for n in N_sweeps
         #    sample, L_set = Mono_Metropolis_sweep_right(p, sample, A, R_set)
@@ -85,16 +92,17 @@ function SR_MPO_gradient(p::parameters, A::Array{ComplexF64}, l1::Matrix{Complex
         l_int::ComplexF64 = 0
 
         #L∇L*:
-        for j::UInt16 in 1:params.N
+        for j::UInt8 in 1:params.N
 
             #1-local part:
-            lL, l∇L = one_body_Lindblad_term_without_preallocation(B,AUX_loc_1,AUX_loc_2,AUX_ID,micro_L_set,micro_R_set,params,sample,j,l1,A,L_set,R_set)
+            lL, l∇L = one_body_Lindblad_term_without_preallocation(AUX,params,sample,j,l1,A,L_set,R_set)
             #lL, l∇L = one_body_Lindblad_term(params,sample_ket,sample_bra,j,l1,A,L_set,R_set)
-            local_L += lL
-            local_∇L += l∇L
+            local_L  += lL
+            local_∇L.+= l∇L
             #Update L_set:
-            L*=A[:,:,1+2*sample.ket[j]+sample.bra[j]]
-            L_set[j+1] = L
+            #L*=A[:,:,1+2*sample.ket[j]+sample.bra[j]]
+            #L_set[j+1] = L
+            mul!(L_set[j+1], L_set[j], @view(A[:,:,1+2*sample.ket[j]+sample.bra[j]]))
         end
 
         l_int = Lindblad_Ising_interaction_energy(params, sample, "periodic")
@@ -105,23 +113,23 @@ function SR_MPO_gradient(p::parameters, A::Array{ComplexF64}, l1::Matrix{Complex
         local_L /=ρ_sample
         local_∇L/=ρ_sample
 
-        Δ_MPO_sample = ∂MPO_without_preallocation(B, p, sample, L_set, R_set)/ρ_sample
+        AUX.Δ_MPO_sample = ∂MPO_without_preallocation(AUX, p, sample, L_set, R_set)./ρ_sample
 
         #Add in interaction terms:
         local_L +=l_int
-        local_∇L+=l_int*Δ_MPO_sample
+        local_∇L+=l_int*AUX.Δ_MPO_sample
 
         L∇L+=local_L*conj(local_∇L)
 
         #ΔLL:
-        local_Δ=conj(Δ_MPO_sample)
+        local_Δ=conj(AUX.Δ_MPO_sample)
         ΔLL+=local_Δ
 
         #Mean local Lindbladian:
         mean_local_Lindbladian += local_L*conj(local_L)
 
         #Metric tensor:
-        S, Left = sample_update_SR(AUX, params, S, Left, Δ_MPO_sample)
+        S, Left = sample_update_SR(AUX, params, S, Left, AUX.Δ_MPO_sample)
         #G = Δ_MPO_sample
         #Left += G #change order of conjugation, but it shouldn't matter
         #for s in 1:4, j in 1:params.χ, i in 1:params.χ, ss in 1:4, jj in 1:params.χ, ii in 1:params.χ

@@ -30,14 +30,78 @@ end
 
 
 function Ising_interaction_energy(params::parameters, sample::Vector{Bool}, boundary_conditions)
-    energy=0
-    for j in 1:params.N-1
-        energy -= (2*sample[j]-1) * (2*sample[j+1]-1)
+    if params.N==1
+        return 0
+    else
+        energy=0
+        for j in 1:params.N-1
+            energy -= (2*sample[j]-1) * (2*sample[j+1]-1)
+        end
+        if boundary_conditions=="periodic"
+            energy -= (2*sample[params.N]-1) * (2*sample[1]-1)
+        end
+        return params.J*energy
     end
-    if boundary_conditions=="periodic"
-        energy -= (2*sample[params.N]-1) * (2*sample[1]-1)
+end
+
+function Ising_interaction_energy_2D(params::parameters, sample::Vector{Bool})
+
+    if params.N>=9
+        energy=0
+        for k in 0:params.N-1
+            for j in 1:params.N-1
+                energy -= (2*sample[j+k*params.N]-1) * (2*sample[j+1+k*params.N]-1)
+            end
+            energy -= (2*sample[params.N+k*params.N]-1) * (2*sample[1+k*params.N]-1)
+        end
+        for j in 1:params.N-1
+            for k in 0:params.N-1
+                energy -= (2*sample[j+k*params.N]-1) * (2*sample[j+(k+1)*params.N]-1)
+            end
+            energy -= (2*sample[j+params.N^2]-1) * (2*sample[j+0]-1)
+        end
+        return params.J*energy
     end
-    return params.J*energy
+end
+
+export Exact_MPS_energy
+
+function Exact_MPS_energy(params::parameters, A::Array{Float64}, basis, h1::Matrix)
+    Z=0
+    mean_local_Hamiltonian::Float64 = 0
+
+    for k in 1:params.dim
+        sample = basis[k]
+        L_set = L_MPS_strings(params, sample, A)
+        R_set = R_MPS_strings(params, sample, A)
+        ρ_sample = tr(L_set[params.N+1])
+        p_sample = ρ_sample*conj(ρ_sample)
+        Z+=p_sample
+
+        L_set = Vector{Matrix{Float64}}()
+        L=Matrix{Float64}(I, params.χ, params.χ)
+        push!(L_set,copy(L))
+
+        e_field=0
+        #L∇L*:
+        for j::UInt16 in 1:params.N
+            #1-local part (field):
+            e_field += one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
+
+            #Update L_set:
+            L*=A[:,:,dINDEX2[sample[j]]]
+            push!(L_set,copy(L))
+        end
+        e_field/=ρ_sample
+
+        #Interaction term:
+        e_int = Ising_interaction_energy(params, sample, "periodic")
+
+        local_E  = e_int+e_field
+        mean_local_Hamiltonian += p_sample*local_E
+    end
+
+    return mean_local_Hamiltonian/=Z
 end
 
 function Exact_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Matrix)
@@ -46,9 +110,9 @@ function Exact_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Ma
     Z=0
     mean_local_Hamiltonian::Float64 = 0
 
-    for _ in 1:params.dim*10
-        #sample = basis[k]
-        sample = rand(Bool,params.N)
+    for k in 1:params.dim
+        sample = basis[k]
+        #sample = rand(Bool,params.N)
         L_set = L_MPS_strings(params, sample, A)
         #println(sample)
         #display(ρ_sample)
@@ -68,7 +132,7 @@ function Exact_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Ma
         #L∇L*:
         for j::UInt16 in 1:params.N
             #1-local part (field):
-            e_field -= one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
+            e_field += one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
 
             #Update L_set:
             L*=A[:,:,dINDEX2[sample[j]]]
@@ -94,20 +158,11 @@ function Exact_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Ma
         #Mean local Lindbladian:
         mean_local_Hamiltonian += p_sample*local_E
     end
-"""
-    println("L∇L")
-    display(L∇L/Z)
 
-    println("ΔLL")
-    display(ΔLL/Z)
-
-    println("mean_local_Hamiltonian= ", mean_local_Hamiltonian)
-    println("Z= ", Z)
-"""
     mean_local_Hamiltonian/=Z
     ΔLL*=mean_local_Hamiltonian
 
-    return (L∇L-ΔLL)/Z, mean_local_Hamiltonian
+    return (L∇L-ΔLL)/Z, mean_local_Hamiltonian, 0
 end
 
 function Exact_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis, h1::Matrix)
@@ -135,7 +190,7 @@ function Exact_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis, h1:
         for j::UInt16 in 1:params.N
 
             #1-local part (field):
-            e_field -= one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
+            e_field += one_body_Hamiltonian_term(params, sample, j, h1, A, L_set, R_set)
 
             #Update L_set:
             L*=A[:,:,dINDEX2[sample[j]]]
@@ -144,7 +199,7 @@ function Exact_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis, h1:
         e_field/=ρ_sample
 
         #Interaction term:
-        e_int = Ising_interaction_energy(params, sample, "periodic")
+        e_int = Ising_interaction_energy(params, sample, "open")
 
         #Calculate logarithmic derivative of MPS:
         Δ_MPO_sample = conj( ∂MPS(params, sample, L_set, R_set)/ρ_sample )
@@ -163,5 +218,5 @@ function Exact_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis, h1:
     mean_local_Hamiltonian/=Z
     ΔLL*=mean_local_Hamiltonian
 
-    return (L∇L-ΔLL)/Z, mean_local_Hamiltonian
+    return (L∇L-ΔLL)/Z, mean_local_Hamiltonian, 0
 end

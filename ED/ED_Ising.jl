@@ -46,7 +46,7 @@ function make_bit_Hamiltonian(N, J::Real, h::Real, basis::Vector{Vector{Bool}})#
     i::UInt32 = 0
     for state in basis
         i += 1
-        @simd for spin in 1:N-1 #HERE!
+        @simd for spin in 1:N#-1 #HERE!
             #H[i, i] -= state[spin]*state[spin+1]
             H[i, i] -= J*(2*state[spin]-1)*(2*state[mod(spin,N)+1]-1)
         end
@@ -69,6 +69,20 @@ function make_bit_Hamiltonian(N, J::Real, h::Real, basis::Vector{Vector{Bool}})#
         end
     end
     return H
+end
+
+export magnetization
+function magnetization(state, basis)
+    M = 0.
+    for (i, bstate) in enumerate(basis)
+        bstate_M = 0.
+        for spin in bstate
+            bstate_M += (state[i]^2 * (spin ? 1 : -1))/length(bstate)
+        end
+        @assert abs(bstate_M) <= 1
+        M += abs(bstate_M)
+    end
+    return M
 end
 
 

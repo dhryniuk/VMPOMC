@@ -32,9 +32,9 @@ function one_body_Lindblad_term(params::parameters, sample::density_matrix, j::U
     return local_L, local_∇L
 end
 
-function one_body_Lindblad_term_without_preallocation(B::Matrix{ComplexF64}, AUX_loc_1::Matrix{ComplexF64}, AUX_loc_2::Matrix{ComplexF64}, AUX_ID, micro_L_set::Vector{<:Matrix{ComplexF64}}, micro_R_set::Vector{Matrix{ComplexF64}}, params::parameters, sample::density_matrix, j::UInt16, l1::Matrix, A::Array{ComplexF64,3}, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+function one_body_Lindblad_term_without_preallocation(AUX::workspace, params::parameters, sample::density_matrix, j::UInt8, l1::Matrix, A::Array{ComplexF64,3}, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
     local_L::ComplexF64 = 0
-    local_∇L::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
+    local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
 
     #micro_L_set::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     #micro_R_set::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
@@ -43,23 +43,24 @@ function one_body_Lindblad_term_without_preallocation(B::Matrix{ComplexF64}, AUX
     #B::Matrix{ComplexF64} = zeros(params.χ,params.χ)
 
     s::Matrix{ComplexF64} = dVEC_transpose[(sample.ket[j],sample.bra[j])]
-    bra_L::Matrix{ComplexF64} = s*conj(l1)
+    #bra_L::Matrix{ComplexF64} = s*conj(l1)
+    mul!(AUX.bra_L, s, conj.(l1))
     @inbounds for (i::UInt16,state::Tuple{Bool,Bool}) in zip(1:4,TPSC)
-        loc::ComplexF64 = bra_L[i]
+        loc::ComplexF64 = AUX.bra_L[i]
         if loc!=0
-            mul!(AUX_loc_1, L_set[j::UInt16], @view(A[:,:,i]))
-            mul!(AUX_loc_2, AUX_loc_1, R_set[(params.N+1-j)::Int64])
-            local_L += loc.*tr(AUX_loc_2)
+            mul!(AUX.loc_1, L_set[j], @view(A[:,:,i]))
+            mul!(AUX.loc_2, AUX.loc_1, R_set[(params.N+1-j)])
+            local_L += loc.*tr(AUX.loc_2)
             #local_L += loc.*tr((L_set[j::UInt16]*A[:,:,i]::Matrix{ComplexF64})*R_set[(params.N+1-j)::Int64])
             #micro_sample = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
             micro_sample = density_matrix(1,copy(sample.ket),copy(sample.bra))
             micro_sample.ket[j] = state[1]
             micro_sample.bra[j] = state[2]
             
-            micro_L_set = L_MPO_strings_without_preallocation(micro_L_set, AUX_ID, params, micro_sample, A)
-            micro_R_set = R_MPO_strings_without_preallocation(micro_R_set, AUX_ID, params, micro_sample, A)
+            micro_L_set = L_MPO_strings_without_preallocation(AUX, params, micro_sample, A)
+            micro_R_set = R_MPO_strings_without_preallocation(AUX, params, micro_sample, A)
             #local_∇L+= loc.*∂MPO(params, micro_sample,micro_L_set,micro_R_set)
-            local_∇L.+= loc.*∂MPO_without_preallocation(B,params, micro_sample,micro_L_set,micro_R_set)
+            local_∇L.+= loc.*∂MPO_without_preallocation(AUX,params, micro_sample,micro_L_set,micro_R_set)
         end
     end
     return local_L, local_∇L
