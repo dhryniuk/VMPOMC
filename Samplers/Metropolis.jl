@@ -1,45 +1,8 @@
 export Mono_Metropolis_sweep_left, Mono_Metropolis_sweep_right, local_Lindbladian, calculate_mean_local_Lindbladian,  MC_mean_local_Lindbladian
 
-#Sweep lattice from right to left:
-function Dual_Metropolis_sweep(sample::density_matrix, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
-    R_set = []
-    R = Matrix{ComplexF64}(I, χ, χ)
-    push!(R_set, copy(R))
-    C = tr(L_set[N+1]) #Current MPO  ---> move into loop
-    for i in N:-1:1
-
-        #Update ket:
-        sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
-        sample_p.ket[i] = 1-sample.ket[i]
-        #P = tr(L_set[i]*A[:,:,dINDEX2[sample_p.ket[i]],dINDEX2[sample.bra[i]]])
-        P = tr(L_set[i]*A[:,:,dINDEX[(sample_p.ket[i],sample.bra[i])]]*R_set[N+1-i])
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
-        if rand() <= metropolis_prob
-            sample = sample_p
-        end
-        #aux_R = R*A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample.bra[i]]] #auxiliary R
-        aux_R = R*A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
-        C = tr(L_set[i]*aux_R)
-
-        #Update bra:
-        sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra))
-        sample_p.bra[i] = 1-sample.bra[i]
-        #P = tr(L_set[i]*A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample_p.bra[i]]])
-        P = tr(L_set[i]*A[:,:,dINDEX[(sample.ket[i],sample_p.bra[i])]]*R_set[N+1-i])
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
-        if rand() <= metropolis_prob
-            sample = sample_p
-        end
-        #R *= A[:,:,dINDEX2[sample.ket[i]],dINDEX2[sample.bra[i]]]
-        R *= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
-        push!(R_set, copy(R))
-        C = tr(L_set[i]*R)
-
-    end
-    return sample, R_set
-end
-
-function Mono_Metropolis_sweep_left(AUX::workspace, params::parameters, sample::density_matrix, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
+#Sweeps lattice from right to left
+function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, 
+    L_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, params::parameters, AUX::workspace)
 
     function draw_excluded(u)
         v::Int8 = rand(1:3)
@@ -51,47 +14,34 @@ function Mono_Metropolis_sweep_left(AUX::workspace, params::parameters, sample::
 
     acc=0
 
-    #R_set = Vector{Matrix{ComplexF64}}(undef,0)
-    #R_set = []
-    #R = Matrix{ComplexF64}(I, params.χ, params.χ)
-    #push!(R_set, copy(R))
-    #C = tr(L_set[params.N+1]) #Current MPO  ---> move into loop
+    R_set::Vector{Matrix{eltype(A)}} = [ Matrix{eltype(A)}(undef, params.χ, params.χ) for _ in 1:params.N+1 ]
+    #R_set = [ Matrix{<:Complex{<:AbstractFloat}}(undef, params.χ, params.χ) for _ in 1:params.N+1 ]
 
-    R_set::Vector{Matrix{ComplexF64}} = [ Matrix{ComplexF64}(undef, params.χ, params.χ) for _ in 1:params.N+1 ]
-    R_set[1] = Matrix{ComplexF64}(I, params.χ, params.χ)
+    R_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
     AUX.C_mat = L_set[params.N+1]
     C = tr(AUX.C_mat)
 
     for i::UInt8 in params.N:-1:1
-
-        sample_p = density_matrix(1,copy(sample.ket),copy(sample.bra)) #deepcopy necessary?
-        #u = dINDEX[(sample.ket[i],sample.bra[i])]
+        #sample_p = density_matrix(1,copy(sample.ket),copy(sample.bra)) 
+        #sample_p = projector(copy(sample.ket),copy(sample.bra)) 
+        sample_p = projector(sample)
         draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
         (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
-        #P = tr(L_set[i]*A[:,:,v]*R_set[params.N+1-i])
         mul!(AUX.Metro_1,L_set[i],@view(A[:,:,draw]))
         mul!(AUX.Metro_2,AUX.Metro_1,R_set[params.N+1-i])
         P=tr(AUX.Metro_2)
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         if rand() <= metropolis_prob
-            #sample = sample_p
-            sample.ket = copy(sample_p.ket)
-            sample.bra = copy(sample_p.bra)
+            #sample.ket = copy(sample_p.ket)
+            #sample.bra = copy(sample_p.bra)
+            sample = projector(sample_p)
             acc+=1
         end
-
-        #R = A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]*R
-        #R = A[:,:,1+2*sample.ket[i]+sample.bra[i]]*R
-        #push!(R_set, copy(R))
-        #C = tr(L_set[i]*R)
-    
         mul!(R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), R_set[params.N+1-i])
         mul!(AUX.C_mat, L_set[i], R_set[params.N+2-i])
         C = tr(AUX.C_mat)
-        #C = tr(L_set[i]*R_set[params.N+2-i])
-
     end
-    return sample, R_set::Vector{Matrix{ComplexF64}}, acc
+    return sample, R_set, acc
 end
 
 function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix, A::Array{ComplexF64}, R_set::Vector{Matrix{ComplexF64}})
@@ -168,16 +118,16 @@ end
 
 export MPO_Metropolis_burn_in
 
-function MPO_Metropolis_burn_in(p::parameters, A::Array{ComplexF64,3})
+function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
     
     # Initialize random sample and calculate L_set for that sample:
-    sample::density_matrix = density_matrix(1,rand(Bool, p.N),rand(Bool, p.N))
-    L_set = L_MPO_strings(p, sample, A)
+    sample::projector = projector(rand(Bool, params.N),rand(Bool, params.N))
+    L_set = L_MPO_strings(sample, A, params, AUX)
     
     # Perform burn_in:
-    for _ in 1:p.burn_in
-        sample, R_set = Mono_Metropolis_sweep_left(p,sample,A,L_set)
-        sample, L_set = Mono_Metropolis_sweep_right(p,sample,A,R_set)
+    for _ in 1:params.burn_in
+        sample, R_set = Mono_Metropolis_sweep_left(params,sample,A,L_set)
+        sample, L_set = Mono_Metropolis_sweep_right(params,sample,A,R_set)
     end
 
     return sample, L_set

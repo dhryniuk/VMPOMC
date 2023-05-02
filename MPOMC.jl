@@ -9,7 +9,7 @@ using ArnoldiMethod
 #using Plots
 #using NPZ
 #using DelimitedFiles
-using DoubleFloats
+
 
 
 #Other utilities:
@@ -26,14 +26,11 @@ include("ED/ED_Lindblad.jl")
 
 #Matrix Product functions:
 include("MPO/MPS.jl")
-include("MPO/fMPS.jl")
 include("MPO/MPO.jl")
-include("MPO/fMPO.jl")
 
 
 #Samplers:
 include("Samplers/Metropolis.jl")
-include("Samplers/fMetropolis.jl")
 
 
 #Optimisers:
@@ -49,13 +46,6 @@ include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
 
-include("Optimisers/fMPS/Exact.jl")
-include("Optimisers/fMPS/SGD.jl")
-#include("Optimisers/fMPS/SR.jl")
-
-include("Optimisers/fMPO/Exact.jl")
-#include("Optimisers/fMPO/SGD.jl")
-#include("Optimisers/fMPO/SR.jl")
 
 #export calculate_gradient, calculate_MC_gradient_full
 #export SR_calculate_gradient, SR_calculate_MC_gradient_full

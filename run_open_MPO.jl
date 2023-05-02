@@ -19,13 +19,13 @@ using BenchmarkTools
 using DoubleFloats
 
 #Define constants:
-const J=1.0 #interaction strength
-const h=1.0 #transverse field strength
-const γ=1.0 #spin decay rate
+const J=0.5 #interaction strength
+const h=0.5 #transverse field strength
+const γ=0.5 #spin decay rate
 const α=0
-const N=6
+const N=3
 const dim = 2^N
-χ=4 #bond dimension
+χ=6 #bond dimension
 const burn_in = 0
 
 MPOMC.set_parameters(N,χ,J,h,γ,α,burn_in)
@@ -34,7 +34,7 @@ const basis=generate_bit_basis_reversed(N)
 #const basis=generate_bit_basis(N)
 #display(basis)
 
-const l1 = make_one_body_Lindbladian(h*sx,γ*sm)
+const l1 = make_one_body_Lindbladian(MPOMC.params,sx,sm)
 
 A_init=rand(ComplexF64, χ,χ,2,2)
 A=copy(A_init)
@@ -60,20 +60,15 @@ F=0.996
 ϵ=0.01
 
 @time begin
-    for k in 1:3000
+    for k in 1:1500
         E=0
         acc::Float64=0
         for i in 1:1
             #display(A)
 
             new_A=zeros(Float64, χ,χ,2)
+            #∇_A,∇_V,E=Exact_fMPO_gradient(MPOMC.params,A,V,l1,basis) 
             ∇_A,∇_V,E=calculate_open_MPO_gradient(MPOMC.params,A,V,l1,basis) 
-            #∇,E=MC_calculate_MPS_gradient(MPOMC.params,A,10*k) 
-            #∇,E,acc=MC_SR_calculate_MPS_gradient(MPOMC.params,A,50*k+300,ϵ) 
-            #∇,E,acc=MPS_calculate_gradient(MPOMC.params,A,50*k+300,ϵ) 
-            #∇,E=distributed_SR_calculate_MC_MPS_gradient(MPOMC.params,A,10*k,ϵ)
-            #display(new_A)
-            #display(∇)
 
             #update bulk tensors:
             ∇_A./=maximum(abs.(∇_A))
@@ -100,6 +95,15 @@ F=0.996
     end
 end
 
-oMPO()
+#fMPO()
 #@code_warntype  MC_SR_calculate_MPS_gradient(MPOMC.params,A,100,ϵ) 
 #@code_warntype distributed_SR_calculate_MC_MPS_gradient(MPOMC.params,A,100,ϵ)
+
+function xcalculate_z_magnetization(params, A::Array{ComplexF64,3}, V::Array{ComplexF64})
+    mp=transpose(V[:,dINDEX[(1,1)]] + V[:,dINDEX[(0,0)]])
+    for _ in 2:params.N-1
+        mp*=-A[:,:,dINDEX[(1,1)]] + A[:,:,dINDEX[(0,0)]]
+    end
+    mp*=V[:,dINDEX[(1,1)]] + V[:,dINDEX[(0,0)]]
+    return mp
+end

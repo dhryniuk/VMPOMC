@@ -25,9 +25,9 @@ spsp = sparse(sp)
 spsm = sparse(sm)
 
 function make_one_body_Lindbladian(params::parameters, H, Γ)
-    L_H = -1im*params.h*(H⊗id - id⊗transpose(H))
-    L_D = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
-    return L_H + params.γ*L_D
+    L_H::Matrix{ComplexF64} = -1im*params.h*(H⊗id - id⊗transpose(H))
+    L_D::Matrix{ComplexF64} = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
+    return (L_H + params.γ*L_D)::Matrix{ComplexF64}
 end
 
 function make_two_body_Lindblad_Hamiltonian(A, B)

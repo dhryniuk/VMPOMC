@@ -9,7 +9,8 @@ function dINDEXf(b::Bool, k::Bool)
     return 1+2*b+k
 end
 dVEC =   Dict((0,0) => [1,0,0,0], (0,1) => [0,1,0,0], (1,0) => [0,0,1,0], (1,1) => [0,0,0,1])
-dVEC_transpose::Dict{Tuple{Bool,Bool},Matrix{ComplexF64}} = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
+#dVEC_transpose::Dict{Tuple{Bool,Bool},Matrix{ComplexF64}} = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
+dVEC_transpose::Dict{Tuple{Bool,Bool},Matrix} = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
 dUNVEC = Dict([1,0,0,0] => (0,0), [0,1,0,0] => (0,1), [0,0,1,0] => (1,0), [0,0,0,1] => (1,1))
 TPSC::Vector{Tuple{Bool,Bool}} = [(0,0),(0,1),(1,0),(1,1)]
 #TPSC = [(0,0),(1,0),(0,1),(1,1)]
@@ -32,9 +33,9 @@ mutable struct parameters
     N::Int64
     dim::Int64
     χ::Int64
-    J::Float64
-    h::Float64
-    γ::Float64
+    J::Float16
+    h::Float16
+    γ::Float16
     α::Int
     burn_in::Int
 end
@@ -100,17 +101,17 @@ function set_parameters(N,χ,J,h,γ,α,burn_in)
     params.burn_in = burn_in;
 end
 
-mutable struct workspace
-    micro_L_set::Vector{Matrix{ComplexF64}}
-    micro_R_set::Vector{Matrix{ComplexF64}}
-    plus_S::Array{ComplexF64,2}
-    B::Matrix{ComplexF64}
-    ID::Matrix{ComplexF64}
-    loc_1::Matrix{ComplexF64}
-    loc_2::Matrix{ComplexF64}
-    Metro_1::Matrix{ComplexF64}
-    Metro_2::Matrix{ComplexF64}
-    C_mat::Matrix{ComplexF64}
-    bra_L::Matrix{ComplexF64}
-    Δ_MPO_sample::Array{ComplexF64,3}
+mutable struct workspace{T<:Complex{<:AbstractFloat}}
+    micro_L_set::Vector{Matrix{T}}
+    micro_R_set::Vector{Matrix{T}}
+    plus_S::Array{T,2}
+    B::Matrix{T}
+    ID::Matrix{T}
+    loc_1::Matrix{T}
+    loc_2::Matrix{T}
+    Metro_1::Matrix{T}
+    Metro_2::Matrix{T}
+    C_mat::Matrix{T}
+    bra_L::Matrix{T}
+    Δ_MPO_sample::Array{T,3}
 end
