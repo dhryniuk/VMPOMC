@@ -106,12 +106,13 @@ function DQIM(params)
 
     L_D = zeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
     for i in 1:params.N
-        Γ = params.γ*foldl(⊗, dissip_term_ops)
+        #Γ = params.γ*foldl(⊗, dissip_term_ops)
+        Γ = foldl(⊗, dissip_term_ops)
         dissip_term_ops = circshift(dissip_term_ops,1)
         L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
     end
 
-    return L_H + L_D
+    return L_H + params.γ*L_D
 end
 
 
@@ -149,12 +150,12 @@ function sparse_DQIM(params)
 
     L_D = spzeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
     for i in 1:params.N
-        Γ = params.γ*foldl(⊗, dissip_term_ops)
+        Γ = foldl(⊗, dissip_term_ops)
         dissip_term_ops = circshift(dissip_term_ops,1)
         L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
     end
 
-    return L_H + L_D
+    return L_H + params.γ*L_D
 end
 
 

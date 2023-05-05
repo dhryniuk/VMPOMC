@@ -2,6 +2,7 @@ export make_density_matrix, adaptive_step_size
 
 export dINDEX
 
+
 #Useful dictionaries:
 dREVINDEX::Dict{Int8,Tuple{Bool,Bool}} = Dict(1 => (0,0), 2 => (0,1), 3 => (1,0), 4 => (1,1))
 dINDEX::Dict{Tuple{Bool,Bool},Int8} = Dict((0,0) => 1, (0,1) => 2, (1,0) => 3, (1,1) => 4)
@@ -114,4 +115,22 @@ mutable struct workspace{T<:Complex{<:AbstractFloat}}
     C_mat::Matrix{T}
     bra_L::Matrix{T}
     Δ_MPO_sample::Array{T,3}
+end
+
+function set_workspace(A::Array{<:Complex{<:AbstractFloat}}, params::parameters)
+    AUX = workspace(
+        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
+        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
+        zeros(eltype(A), 4*params.χ^2,4*params.χ^2),
+        zeros(eltype(A), params.χ,params.χ),
+        Matrix{eltype(A)}(I, params.χ, params.χ),
+        zeros(eltype(A), params.χ,params.χ),
+        zeros(eltype(A), params.χ,params.χ),
+        zeros(eltype(A), params.χ,params.χ),
+        zeros(eltype(A), params.χ,params.χ),
+        zeros(eltype(A), params.χ,params.χ),
+        zeros(eltype(A), 1, 4),
+        zeros(eltype(A), params.χ, params.χ, 4)
+    )
+    return AUX
 end

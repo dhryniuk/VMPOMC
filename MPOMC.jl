@@ -27,6 +27,7 @@ include("ED/ED_Lindblad.jl")
 #Matrix Product functions:
 include("MPO/MPS.jl")
 include("MPO/MPO.jl")
+include("MPO/observables.jl")
 
 
 #Samplers:
@@ -34,8 +35,6 @@ include("Samplers/Metropolis.jl")
 
 
 #Optimisers:
-include("Optimisers/SGD.jl")
-include("Optimisers/SR.jl")
 include("Optimisers/MPS/Exact.jl")
 include("Optimisers/MPS/SGD.jl")
 include("Optimisers/MPS/SR.jl")

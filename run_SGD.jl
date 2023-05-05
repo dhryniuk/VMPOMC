@@ -6,10 +6,10 @@ using LinearAlgebra
 
 
 #Define constants:
-const J=0.0 #interaction strength
-const h=1.1 #transverse field strength
-const γ=0.3 #spin decay rate
-const N=4
+const J=0.5 #interaction strength
+const h=1.0 #transverse field strength
+const γ=1.0 #spin decay rate
+const N=2
 const dim = 2^N
 χ=2 #bond dimension
 

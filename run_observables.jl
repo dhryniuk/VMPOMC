@@ -2,9 +2,9 @@ using Distributed
 import Random
 Random.seed!(1)
 
-addprocs(6)
-println(nprocs())
-println(nworkers())
+#addprocs(4)
+#println(nprocs())
+#println(nworkers())
 
 @everywhere include("MPOMC.jl")
 @everywhere using .MPOMC
@@ -21,21 +21,24 @@ using LinearAlgebra
 const J=0.5 #interaction strength
 const h=1.0 #transverse field strength
 const γ=1.0 #spin decay rate
-const N=16
+const N=8
 const dim = 2^N
-χ=2 #bond dimension
+const α=0
+χ=8 #bond dimension
+const burn_in = 0
 
-MPOMC.set_parameters(N,χ,J,h,γ)
+MPOMC.set_parameters(N,χ,J,h,γ,α, burn_in)
 
 #Make single-body Lindbladian:
-const l1 = make_one_body_Lindbladian(h*MPOMC.sx,γ*MPOMC.sm)
+const l1 = make_one_body_Lindbladian(MPOMC.params,sx,sm)
+#const l1 = make_one_body_Lindbladian(h*MPOMC.sx,γ*(MPOMC.sz+1im*MPOMC.sy))
 #display(l1)
 
-const basis=generate_bit_basis_reversed(N)
+#const basis=generate_bit_basis_reversed(N)
 
 
 A_init=rand(ComplexF64, χ,χ,2,2)
-A=copy(A_init)
+A=deepcopy(A_init)
 A=reshape(A,χ,χ,4)
 
 list_of_L = Array{Float64}(undef, 0)
@@ -47,36 +50,34 @@ list_of_purities= Array{ComplexF64}(undef, 0)
 
 list_of_density_matrices= Array{Matrix{ComplexF64}}(undef, 0)
 
-old_L=1
 
-δ = 0.005
+δ::Float16 = 0.03
 
 N_MC=2
 Q=1
-QB=1
-F=0.99
-ϵ=0.3
+F::Float16=0.95
+ϵ::Float16=0.1
 
 @time begin
-    for k in 1:300
+    for k in 1:200
         L=0;LB=0
+        acc::Float64=0
         for i in 1:10
 
             new_A=zeros(ComplexF64, χ,χ,4)
-            #∇,L=calculate_gradient(MPOMC.params,A,l1,basis)
+            #∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
             #∇,L=SR_calculate_gradient(MPOMC.params,A,l1,ϵ,basis)
             #∇,L=calculate_MC_gradient_full(MPOMC.params,A,l1,50,0)
-            #∇,L=SR_calculate_MC_gradient_full(MPOMC.params, A, l1, 50, 0, ϵ)
-            ∇,L=distributed_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,50,0, ϵ)
+            ∇,L,acc=SR_MPO_gradient(A,l1,20*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
+            #∇,L=distributed_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,300,0, ϵ)
             #∇,L=SGD_MC_grad_distributed(MPOMC.params,A,l1,25,0)
             #∇,L=MT_SGD_MC_grad(MPOMC.params,A,l1,5,2)
             #∇,L=multi_threaded_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,1,0,ϵ) 
-            #∇,L=SR_calculate_gradient(MPOMC.params,A,l1,ϵ,basis)
             ∇./=maximum(abs.(∇))
-            new_A = A - 1.0*δ*F^k*∇
+            new_A = A - δ*F^(k)*∇#.*(1+0.5*rand())
 
             global A = new_A
-            global A./=normalize_MPO(MPOMC.params, A)
+            global A = normalize_MPO(MPOMC.params, A)
 
         end
         mx = calculate_x_magnetization(MPOMC.params,A)
@@ -86,8 +87,7 @@ F=0.99
 
         #L = calculate_mean_local_Lindbladian(MPOMC.params,l1,A,basis)
         #println("k=$k: ", real(L), " ; ", mz, " ; ", mx)
-        println("k=$k: ", real(L), " \n M_x: ", round(mx,sigdigits=4), " \n M_y: ", round(my,sigdigits=4), " \n M_z: ", round(mz,sigdigits=4))
-        global old_L = L
+        println("k=$k: ", real(L), " ; acc_rate=", round(acc*100,sigdigits=2), "%", " \n M_x: ", round(mx,sigdigits=4), " \n M_y: ", round(my,sigdigits=4), " \n M_z: ", round(mz,sigdigits=4))
 
         push!(list_of_L,L)
         push!(list_of_Mx,mx)
@@ -100,6 +100,8 @@ F=0.99
     end
 end
 
+"""
+error()
 #npzwrite("data/observables/MPOMC_list_rho_real_χ=$χ.npy", list_of_density_matrices[:])
 #npzwrite("data/observables/MPOMC_list_rho_imag_χ=$χ.npy", imag.(list_of_density_matrices))
 
@@ -125,23 +127,24 @@ display(p)
 #p=plot(real(list_of_m), xaxis=:log)
 #plot!(imag(list_of_m))
 #display(p)
-
+"""
 
 #L=own_version_DQIM(MPOMC.params,basis)
-L=DQIM(MPOMC.params)
-vals, vecs = eigen(L)
-#vals, vecs = eigen_sparse(L)
-display(vals)
-display(vecs[:,2^(2N)])
-ρ=reshape(vecs[:,2^(2N)],2^N,2^N)
+L=sparse_DQIM(MPOMC.params)
+#vals, vecs = eigen(L)
+vals, vecs = eigen_sparse(L)
+#display(vals)
+#display(vecs[:,2^(2N)])
+#ρ=reshape(vecs[:,2^(2N)],2^N,2^N)
+ρ=reshape(vecs,2^N,2^N)
 ρ=round.(ρ,digits = 12)
 ρ./=tr(ρ)
-display(ρ)
+#display(ρ)
 
-npzwrite("data/observables/rho_real.npy", real.(ρ))
-npzwrite("data/observables/rho_imag.npy", imag.(ρ))
+#npzwrite("data/observables/rho_real.npy", real.(ρ))
+#npzwrite("data/observables/rho_imag.npy", imag.(ρ))
 
-vec_basis=construct_vec_density_matrix_basis(MPOMC.params.N)
+#vec_basis=construct_vec_density_matrix_basis(MPOMC.params.N)
 
 #Mx=real( own_x_magnetization(ρ,MPOMC.params,vec_basis) )
 Mx=real( ED_magnetization(sx,ρ,MPOMC.params.N) )
@@ -153,6 +156,8 @@ println("True y-magnetization is: ", My)
 #Mz=real( own_z_magnetization(ρ,MPOMC.params,vec_basis) )
 Mz=real( ED_magnetization(sz,ρ,MPOMC.params.N) )
 println("True z-magnetization is: ", Mz)
+
+error()
 
 p=plot(real(list_of_Mx), xaxis=:log)#, ylims=(-0.3,0.3))
 #plot!(imag(list_of_Mz))

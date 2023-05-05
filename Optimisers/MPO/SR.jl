@@ -4,10 +4,8 @@ function MPO_flatten_index(i::UInt8,j::UInt8,s::UInt8,params::parameters)
     return i+params.χ*(j-1)+params.χ^2*(s-1)
 end
 
-function sample_update_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, 
-    Δ_MPO_sample::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
-    
-    G = reshape(Δ_MPO_sample,4*params.χ^2)
+function sample_update_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::parameters, AUX::workspace)
+    G = reshape(AUX.Δ_MPO_sample,4*params.χ^2)
     conj_G = conj(G)
     avg_G.+= G
     mul!(AUX.plus_S,conj_G,transpose(G))
@@ -18,7 +16,7 @@ end
 function apply_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, 
     L∇L::Array{<:Complex{<:AbstractFloat},3}, ΔLL::Array{<:Complex{<:AbstractFloat},3}, params::parameters)
 
-    #Metric tensor:
+    #Compute metric tensor:
     S./=N_MC
     avg_G./=N_MC
     conj_avg_G = conj(avg_G)
@@ -32,6 +30,7 @@ function apply_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex
     flat_grad::Vector{eltype(S)} = reshape(grad,4*params.χ^2)
     flat_grad = inv(S)*flat_grad
     grad = reshape(flat_grad,params.χ,params.χ,4)
+
     return grad
 end
 
@@ -43,22 +42,7 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
     mean_local_Lindbladian::eltype(A) = 0
 
     # Preallocate auxiliary arrays:
-    AUX = workspace(
-        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
-        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
-        zeros(eltype(A), 4*params.χ^2,4*params.χ^2),
-        zeros(eltype(A), params.χ,params.χ),
-        Matrix{eltype(A)}(I, params.χ, params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), 1, 4),
-        zeros(eltype(A), params.χ, params.χ, 4)
-    )
-
-
+    AUX = set_workspace(A,params)
 
     #dVEC_transpose::Dict{Tuple{Bool,Bool},Matrix{eltype(A)}} = Dict((0,0) => [1 0 0 0], (0,1) => [0 1 0 0], (1,0) => [0 0 1 0], (1,1) => [0 0 0 1])
 
@@ -81,8 +65,7 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
         ρ_sample::eltype(A) = tr(R_set[params.N+1])
 
         L_set::Vector{Matrix{eltype(A)}} = [ Matrix{eltype(A)}(undef, params.χ, params.χ) for _ in 1:params.N+1 ]
-        L = Matrix{eltype(A)}(I, params.χ, params.χ)
-        L_set[1] = L
+        L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
 
         local_L::eltype(A) = 0
         local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
@@ -94,14 +77,12 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
             lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,L_set,R_set,params,AUX)
             local_L  += lL
             local_∇L.+= l∇L
+
             #Update L_set:
-            mul!(L_set[j+1], L_set[j], @view(A[:,:,1+2*sample.ket[j]+sample.bra[j]]))
+            mul!(L_set[j+1], L_set[j], @view(A[:,:,idx(sample,j)]))
         end
 
         l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
-        #l_int = N4_Lindblad_Ising_interaction_energy_2D(params, sample)
-        #println("2d: ", l_int)
-        #println("1d: ", Lindblad_Ising_interaction_energy(params, sample, "periodic"))
 
         local_L /=ρ_sample
         local_∇L/=ρ_sample
@@ -122,8 +103,8 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
         #Mean local Lindbladian:
         mean_local_Lindbladian += local_L*conj(local_L)
 
-        #Metric tensor:
-        S, Left = sample_update_SR(S, Left, AUX.Δ_MPO_sample, params, AUX)
+        #Update metric tensor:
+        S, Left = sample_update_SR(S, Left, params, AUX)
     end
     mean_local_Lindbladian/=N_MC
     ΔLL*=mean_local_Lindbladian
