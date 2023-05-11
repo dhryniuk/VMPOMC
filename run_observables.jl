@@ -1,6 +1,4 @@
 using Distributed
-import Random
-Random.seed!(1)
 
 #addprocs(4)
 #println(nprocs())
@@ -14,29 +12,33 @@ using LinearAlgebra
 #using TensorOperations
 #using Distributions
 #using Revise
+import Random
+
 
 #Vincentini parameters: γ=1.0, J=0.5, h to be varied.
 
 #Define constants:
-const J=0.5 #interaction strength
-const h=1.0 #transverse field strength
-const γ=1.0 #spin decay rate
-const N=8
-const dim = 2^N
+const J = 0.5 #interaction strength
+const hx= 0.25 #transverse field strength
+const hz= 0.0 #transverse field strength
+const γ = 1.0 #spin decay rate
 const α=0
-χ=8 #bond dimension
+const N=3
+const dim = 2^N
+χ=4 #bond dimension
 const burn_in = 0
 
-MPOMC.set_parameters(N,χ,J,h,γ,α, burn_in)
+MPOMC.set_parameters(N,χ,J,hx,hz,γ,α, burn_in)
 
 #Make single-body Lindbladian:
-const l1 = make_one_body_Lindbladian(MPOMC.params,sx,sm)
+const l1 = make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm)
 #const l1 = make_one_body_Lindbladian(h*MPOMC.sx,γ*(MPOMC.sz+1im*MPOMC.sy))
 #display(l1)
 
-#const basis=generate_bit_basis_reversed(N)
+const basis=generate_bit_basis_reversed(N)
 
 
+Random.seed!(1)
 A_init=rand(ComplexF64, χ,χ,2,2)
 A=deepcopy(A_init)
 A=reshape(A,χ,χ,4)
@@ -50,14 +52,21 @@ list_of_purities= Array{ComplexF64}(undef, 0)
 
 list_of_density_matrices= Array{Matrix{ComplexF64}}(undef, 0)
 
+function set_beta(it, β_inf, decay_rate)
+    return β_inf +(1-β_inf)/(it*decay_rate+1)
+end
 
-δ::Float16 = 0.03
+δ::Float16 = 0.05
 
 N_MC=2
 Q=1
-F::Float16=0.95
+F::Float16=0.97
 ϵ::Float16=0.1
+β::Float64=0.6
 
+display(A_init)
+
+#@profview begin
 @time begin
     for k in 1:200
         L=0;LB=0
@@ -66,13 +75,16 @@ F::Float16=0.95
 
             new_A=zeros(ComplexF64, χ,χ,4)
             #∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
-            #∇,L=SR_calculate_gradient(MPOMC.params,A,l1,ϵ,basis)
-            #∇,L=calculate_MC_gradient_full(MPOMC.params,A,l1,50,0)
-            ∇,L,acc=SR_MPO_gradient(A,l1,20*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
+            #∇,L,acc=SGD_MPO_gradient(A,l1,100*4*χ^2+k,MPOMC.params)
+            #∇,L,acc=reweighted_SGD_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,MPOMC.params)#0+50*k)
+            #∇,L,acc=SR_MPO_gradient(A,l1,20*4*χ^2+k,ϵ, MPOMC.params)
+            ∇,L,acc=reweighted_SR_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
             #∇,L=distributed_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,300,0, ϵ)
             #∇,L=SGD_MC_grad_distributed(MPOMC.params,A,l1,25,0)
             #∇,L=MT_SGD_MC_grad(MPOMC.params,A,l1,5,2)
             #∇,L=multi_threaded_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,1,0,ϵ) 
+            #display(∇)
+            #error()
             ∇./=maximum(abs.(∇))
             new_A = A - δ*F^(k)*∇#.*(1+0.5*rand())
 
@@ -87,7 +99,7 @@ F::Float16=0.95
 
         #L = calculate_mean_local_Lindbladian(MPOMC.params,l1,A,basis)
         #println("k=$k: ", real(L), " ; ", mz, " ; ", mx)
-        println("k=$k: ", real(L), " ; acc_rate=", round(acc*100,sigdigits=2), "%", " \n M_x: ", round(mx,sigdigits=4), " \n M_y: ", round(my,sigdigits=4), " \n M_z: ", round(mz,sigdigits=4))
+        println("k=$k: ", real(L)/N, " ; acc_rate=", round(acc*100,sigdigits=2), "%", " \n M_x: ", round(mx,sigdigits=4), " \n M_y: ", round(my,sigdigits=4), " \n M_z: ", round(mz,sigdigits=4))
 
         push!(list_of_L,L)
         push!(list_of_Mx,mx)
@@ -130,7 +142,7 @@ display(p)
 """
 
 #L=own_version_DQIM(MPOMC.params,basis)
-L=sparse_DQIM(MPOMC.params)
+L=sparse_DQIM(MPOMC.params, "periodic")
 #vals, vecs = eigen(L)
 vals, vecs = eigen_sparse(L)
 #display(vals)
@@ -147,14 +159,14 @@ vals, vecs = eigen_sparse(L)
 #vec_basis=construct_vec_density_matrix_basis(MPOMC.params.N)
 
 #Mx=real( own_x_magnetization(ρ,MPOMC.params,vec_basis) )
-Mx=real( ED_magnetization(sx,ρ,MPOMC.params.N) )
+Mx=real( magnetization(sx,ρ,MPOMC.params) )
 println("True x-magnetization is: ", Mx)
 
-My=real( ED_magnetization(sy,ρ,MPOMC.params.N) )
+My=real( magnetization(sy,ρ,MPOMC.params) )
 println("True y-magnetization is: ", My)
 
 #Mz=real( own_z_magnetization(ρ,MPOMC.params,vec_basis) )
-Mz=real( ED_magnetization(sz,ρ,MPOMC.params.N) )
+Mz=real( magnetization(sz,ρ,MPOMC.params) )
 println("True z-magnetization is: ", Mz)
 
 error()

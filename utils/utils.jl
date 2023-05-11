@@ -34,9 +34,10 @@ mutable struct parameters
     N::Int64
     dim::Int64
     χ::Int64
-    J::Float16
-    h::Float16
-    γ::Float16
+    J::Float32
+    hx::Float32
+    hz::Float32
+    γ::Float32
     α::Int
     burn_in::Int
 end
@@ -91,18 +92,21 @@ function make_density_matrix(params, A, basis)
     return ρ
 end
 
-function set_parameters(N,χ,J,h,γ,α,burn_in)
+function set_parameters(N,χ,J,hx,hz,γ,α,burn_in)
 	params.N = N;
     params.dim = 2^N;
     params.χ = χ;
     params.J = J;
-    params.h = h;
+    params.hx = hx;
+    params.hz = hz;
     params.γ = γ;
     params.α = α;
     params.burn_in = burn_in;
 end
 
 mutable struct workspace{T<:Complex{<:AbstractFloat}}
+    L_set::Vector{Matrix{T}}
+    R_set::Vector{Matrix{T}}
     micro_L_set::Vector{Matrix{T}}
     micro_R_set::Vector{Matrix{T}}
     plus_S::Array{T,2}
@@ -114,11 +118,14 @@ mutable struct workspace{T<:Complex{<:AbstractFloat}}
     Metro_2::Matrix{T}
     C_mat::Matrix{T}
     bra_L::Matrix{T}
-    Δ_MPO_sample::Array{T,3}
+    Δ::Array{T,3} #tensor of derivatives
+    local_∇L_diagonal_coeff::ComplexF64
 end
 
 function set_workspace(A::Array{<:Complex{<:AbstractFloat}}, params::parameters)
     AUX = workspace(
+        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
+        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
         [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
         [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
         zeros(eltype(A), 4*params.χ^2,4*params.χ^2),
@@ -130,7 +137,8 @@ function set_workspace(A::Array{<:Complex{<:AbstractFloat}}, params::parameters)
         zeros(eltype(A), params.χ,params.χ),
         zeros(eltype(A), params.χ,params.χ),
         zeros(eltype(A), 1, 4),
-        zeros(eltype(A), params.χ, params.χ, 4)
-    )
+        zeros(eltype(A), params.χ, params.χ, 4),
+        0.0+0.0im
+        )
     return AUX
 end

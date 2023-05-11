@@ -1,16 +1,16 @@
 export Mono_Metropolis_sweep_left, Mono_Metropolis_sweep_right, local_Lindbladian, calculate_mean_local_Lindbladian,  MC_mean_local_Lindbladian
 
-#Sweeps lattice from right to left
-function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, 
-    L_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, params::parameters, AUX::workspace)
-
-    function draw_excluded(u)
-        v::Int8 = rand(1:3)
-        if v>=u
-            v+=1
-        end
-        return v
+function draw_excluded(u::Int8)
+    v::Int8 = rand(1:3)
+    if v>=u
+        v+=1
     end
+    return v
+end
+
+#Sweeps lattice from right to left
+function bad_Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, 
+    L_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, params::parameters, AUX::workspace)
 
     acc=0
 
@@ -43,6 +43,63 @@ function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:Abst
     end
     return sample, R_set, acc
 end
+
+#Sweeps lattice from right to left
+function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
+
+    acc=0
+    AUX.R_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
+    AUX.C_mat = AUX.L_set[params.N+1]
+    C = tr(AUX.C_mat) #current probability amplitude
+
+    for i::UInt8 in params.N:-1:1
+        sample_p = projector(sample)
+        draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
+        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
+        mul!(AUX.Metro_1,AUX.L_set[i],@view(A[:,:,draw]))
+        mul!(AUX.Metro_2,AUX.Metro_1,AUX.R_set[params.N+1-i])
+        P=tr(AUX.Metro_2) #proposal probability amplitude
+        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        if rand() <= metropolis_prob
+            sample = projector(sample_p)
+            acc+=1
+        end
+        mul!(AUX.R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), AUX.R_set[params.N+1-i])
+        mul!(AUX.C_mat, AUX.L_set[i], AUX.R_set[params.N+2-i])
+        C = tr(AUX.C_mat)
+    end
+    return sample, acc
+end
+
+
+function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
+
+    acc=0
+
+    #AUX.R_set::Vector{Matrix{eltype(A)}} = [ Matrix{eltype(A)}(undef, params.χ, params.χ) for _ in 1:params.N+1 ]
+    AUX.R_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
+    AUX.C_mat = AUX.L_set[params.N+1]
+    C = tr(AUX.C_mat)
+
+    for i::UInt8 in params.N:-1:1
+        sample_p = projector(sample)
+        draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
+        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
+        mul!(AUX.Metro_1,AUX.L_set[i],@view(A[:,:,draw]))
+        mul!(AUX.Metro_2,AUX.Metro_1,AUX.R_set[params.N+1-i])
+        P=tr(AUX.Metro_2)
+        metropolis_prob = real((P*conj(P)))^(β)/real((C*conj(C)))^(β)
+        if rand() <= metropolis_prob
+            sample = projector(sample_p) #replace with =sample_p?
+            acc+=1
+        end
+        mul!(AUX.R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), AUX.R_set[params.N+1-i])
+        mul!(AUX.C_mat, AUX.L_set[i], AUX.R_set[params.N+2-i])
+        C = tr(AUX.C_mat)
+    end
+    return sample, acc
+end
+
 
 function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix, A::Array{ComplexF64}, R_set::Vector{Matrix{ComplexF64}})
 
@@ -122,15 +179,15 @@ function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::
     
     # Initialize random sample and calculate L_set for that sample:
     sample::projector = projector(rand(Bool, params.N),rand(Bool, params.N))
-    L_set = L_MPO_strings(sample, A, params, AUX)
+    AUX.L_set = L_MPO_strings(AUX.L_set, sample, A, params, AUX)
     
     # Perform burn_in:
     for _ in 1:params.burn_in
-        sample, R_set = Mono_Metropolis_sweep_left(params,sample,A,L_set)
-        sample, L_set = Mono_Metropolis_sweep_right(params,sample,A,R_set)
+        sample, AUX.R_set = Mono_Metropolis_sweep_left(params,sample,A,AUX.L_set)
+        sample, AUX.L_set = Mono_Metropolis_sweep_right(params,sample,A,AUX.R_set)
     end
 
-    return sample, L_set
+    return sample#, AUX.L_set
 end
 
 
@@ -216,7 +273,7 @@ end
 
 
 
-
+"""
 function reweighted_Mono_Metropolis_sweep_left(β, params::parameters, sample::density_matrix, A::Array{ComplexF64}, L_set::Vector{Matrix{ComplexF64}})
 
     function draw_excluded(u)
@@ -258,7 +315,7 @@ function reweighted_Mono_Metropolis_sweep_left(β, params::parameters, sample::d
     end
     return sample, R_set::Vector{Matrix{ComplexF64}}, acc
 end
-
+"""
 
 function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
     acc::UInt16=0

@@ -32,21 +32,21 @@ function MPO(params::parameters, sample::density_matrix, A::Array{ComplexF64})
 end
 
 #Left strings of MPOs:
-function L_MPO_strings(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
-    AUX.micro_L_set[1] = AUX.ID
+function L_MPO_strings(L_set, sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
+    L_set[1] = AUX.ID
     for i::UInt8=1:params.N
-        mul!(AUX.micro_L_set[i+1], AUX.micro_L_set[i], @view(A[:,:,idx(sample,i)]))
+        mul!(L_set[i+1], L_set[i], @view(A[:,:,idx(sample,i)]))
     end
-    return AUX.micro_L_set
+    return L_set
 end
 
 #Right strings of MPOs:
-function R_MPO_strings(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
-    AUX.micro_R_set[1] = AUX.ID
+function R_MPO_strings(R_set, sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
+    R_set[1] = AUX.ID
     for i::UInt8=params.N:-1:1
-        mul!(AUX.micro_R_set[params.N+2-i], @view(A[:,:,idx(sample,i)]), AUX.micro_R_set[params.N+1-i])
+        mul!(R_set[params.N+2-i], @view(A[:,:,idx(sample,i)]), R_set[params.N+1-i])
     end
-    return AUX.micro_R_set
+    return R_set
 end
 
 function normalize_MPO(params::parameters, A::Array{<:Complex{<:AbstractFloat},3})

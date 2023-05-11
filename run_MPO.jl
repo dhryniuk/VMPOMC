@@ -9,19 +9,20 @@ import Random
 Random.seed!(1)
 
 #Define constants:
-const J=0.5 #interaction strength
-const h=0.25 #transverse field strength
-const γ=1.0 #spin decay rate
+const J = 0.0 #interaction strength
+const hx= 0.0 #transverse field strength
+const hz= 0.0 #transverse field strength
+const γ = 0.5 #spin decay rate
 const α=0
-const N=4
+const N=2
 const dim = 2^N
-χ=3 #bond dimension
+χ=2 #bond dimension
 const burn_in = 0
 
-MPOMC.set_parameters(N,χ,J,h,γ,α, burn_in)
+MPOMC.set_parameters(N,χ,J,hx,hz,γ,α,burn_in)
 
 #Make single-body Lindbladian:
-const l1 = make_one_body_Lindbladian(MPOMC.params,sx,sm)
+const l1 = make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm)
 #display(l1)
 
 const basis=generate_bit_basis_reversed(N)
@@ -52,7 +53,7 @@ F::Float16=0.9
             #∇,L,acc=SGD_MPO_gradient(A,l1,5*4*χ^2+k,MPOMC.params)
             #∇,L,acc=partial_SGD_MPO_gradient(MPOMC.params,A,l1,10*4*χ^2+k)
             #∇,L,acc=umbrella_SGD_MPO_gradient(0.5,MPOMC.params,A,l1,5*4*χ^2+k)
-            ∇,L,acc=SR_MPO_gradient(A,l1,20*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
+            ∇,L,acc=SR_MPO_gradient(A,l1,10*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
             ####∇,L=SR_calculate_MC_gradient_full(MPOMC.params,A,l1,100,0,ϵ)#0+50*k)
             ∇./=maximum(abs.(∇))
             new_A = A - δ*F^(k)*∇#.*(1+0.5*rand())
