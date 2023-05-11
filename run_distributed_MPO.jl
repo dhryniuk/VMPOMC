@@ -17,7 +17,7 @@ const γ = 1.0 #spin decay rate
 const α=0
 const N=4
 const dim = 2^N
-χ=4 #bond dimension
+χ=3 #bond dimension
 const burn_in = 0
 
 MPOMC.set_parameters(N,χ,J,hx,hz,γ,α,burn_in)
@@ -67,7 +67,7 @@ F::Float16=0.97
 
 @time begin
 #@profview begin
-    for k in 1:250
+    for k in 1:100
         L=0
         acc::Float64=0
         for l in 1:10

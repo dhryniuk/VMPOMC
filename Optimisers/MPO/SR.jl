@@ -90,9 +90,10 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
         local_L +=l_int
         local_∇L+=l_int*AUX.Δ
 
-        L∂L+=local_L*conj(local_∇L)
+        #Update L∂L* ensemble average:
+        L∂L.+=local_L*conj(local_∇L)
 
-        #ΔLL:
+        #Update ΔLL ensemble average:
         ΔLL.+=AUX.Δ
 
         #Mean local Lindbladian:
@@ -178,7 +179,7 @@ function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFl
         AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
         AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
 
-        #L∂L*:
+        #Calculate L∂L*:
         for j::UInt8 in 1:params.N
             #1-local part:
             lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
@@ -224,7 +225,7 @@ end
 function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
     
     # Define ensemble averages:
-    L∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
     ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
     mean_local_Lindbladian::eltype(A) = 0
 
@@ -255,7 +256,7 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
         AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
         AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
 
-        #L∇L*:
+        #Calculate L∂L*:
         for j::UInt8 in 1:params.N
             #1-local part:
             lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
@@ -274,7 +275,7 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
         local_L +=l_int
         local_∇L+=l_int*AUX.Δ
 
-        L∇L+=local_L*conj(local_∇L)
+        L∂L+=local_L*conj(local_∇L)
 
         #ΔLL:
         ΔLL+=AUX.Δ
@@ -287,7 +288,7 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
     end
     ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
 
-    return [L∇L, ΔLL, mean_local_Lindbladian, S, Left]
+    return [L∂L, ΔLL, mean_local_Lindbladian, S, Left]
 end
 
 function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
@@ -300,7 +301,7 @@ function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
         one_worker_SR_MPO_gradient(A, l1, N_MC, ϵ, params)
     end
 
-    L∇L=output[1]
+    L∂L=output[1]
     ΔLL=output[2]
     mean_local_Lindbladian=output[3]
     S=output[4]
@@ -313,7 +314,7 @@ function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
     S./=(nworkers())
     Left./=(nworkers())
 
-    grad = apply_SR(S,Left,N_MC,ϵ,L∇L,ΔLL,params)
+    grad = apply_SR(S,Left,N_MC,ϵ,L∂L,ΔLL,params)
 
     return grad, real(mean_local_Lindbladian), 0
 end

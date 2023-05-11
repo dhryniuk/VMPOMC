@@ -18,7 +18,11 @@ include("utils/utils.jl")
 
 #Exact diagonalisation routines:
 include("ED/ED_Ising.jl")
-include("ED/ED_Lindblad.jl")
+#include("ED/ED_Lindblad.jl")
+include("ED/Lindbladians.jl")
+include("ED/operators.jl")
+include("ED/observables.jl")
+include("ED/utils.jl")
 
 #export generate_bit_basis_reversed
 #export make_one_body_Lindbladian, id, sx, sy, sz, sp, sm
@@ -50,7 +54,7 @@ include("Optimisers/MPO/SR.jl")
 #export SR_calculate_gradient, SR_calculate_MC_gradient_full
 
 
-params=parameters(0,0,0,0,0,0,0,0)
+params=parameters(0,0,0,0,0,0,0,0,0)
 
 #addprocs(10)
 

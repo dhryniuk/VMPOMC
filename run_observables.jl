@@ -56,11 +56,11 @@ function set_beta(it, β_inf, decay_rate)
     return β_inf +(1-β_inf)/(it*decay_rate+1)
 end
 
-δ::Float16 = 0.05
+δ::Float16 = 0.03
 
 N_MC=2
 Q=1
-F::Float16=0.97
+F::Float16=0.98
 ϵ::Float16=0.1
 β::Float64=0.6
 
@@ -68,17 +68,17 @@ display(A_init)
 
 #@profview begin
 @time begin
-    for k in 1:200
+    for k in 1:300
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
 
             new_A=zeros(ComplexF64, χ,χ,4)
-            #∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
-            #∇,L,acc=SGD_MPO_gradient(A,l1,100*4*χ^2+k,MPOMC.params)
+            ∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
+            #∇,L,acc=SGD_MPO_gradient(A,l1,10*4*χ^2+k,MPOMC.params)
             #∇,L,acc=reweighted_SGD_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,MPOMC.params)#0+50*k)
             #∇,L,acc=SR_MPO_gradient(A,l1,20*4*χ^2+k,ϵ, MPOMC.params)
-            ∇,L,acc=reweighted_SR_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
+            #∇,L,acc=reweighted_SR_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
             #∇,L=distributed_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,300,0, ϵ)
             #∇,L=SGD_MC_grad_distributed(MPOMC.params,A,l1,25,0)
             #∇,L=MT_SGD_MC_grad(MPOMC.params,A,l1,5,2)

@@ -116,9 +116,10 @@ function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Com
         local_L  +=l_int
         local_∇L.+=l_int*AUX.Δ
 
+        #Update L∂L* ensemble average:
         L∂L.+=local_L*conj(local_∇L)
 
-        #ΔLL:
+        #Update ΔLL ensemble average:
         ΔLL.+=AUX.Δ
 
         #Mean local Lindbladian:

@@ -177,7 +177,7 @@ function bad_Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix
 
             AUX.L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
 
-            #L∇L*:
+            #Calculate L∂L*:
             for j::UInt8 in 1:params.N
                 #1-local part:
                 lL, l∇L = bad_body_Lindblad_term(sample,j,l1,A,AUX.L_set,AUX.R_set,params,AUX)
@@ -217,7 +217,7 @@ end
 function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, basis, params::parameters)
     
     # Define ensemble averages:
-    L∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
     ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
     Z::eltype(A) = 0
     mean_local_Lindbladian::eltype(A) = 0
@@ -242,9 +242,9 @@ function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:C
             p_sample = ρ_sample*conj(ρ_sample)
             Z += p_sample
 
-            AUX.Δ_MPO_sample = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+            AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
 
-            #L∇L*:
+            #Calculate L∂L*:
             for j::UInt8 in 1:params.N
                 #1-local part:
                 lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
@@ -252,28 +252,31 @@ function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:C
                 local_∇L += l∇L
             end
 
-            l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
-
             local_L /=ρ_sample
             local_∇L/=ρ_sample
 
-            #Add in interaction terms:
-            local_L +=l_int
-            local_∇L+=l_int*AUX.Δ_MPO_sample
+            #Add in diagonal part of the local derivative:
+            local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
 
-            L∇L+=p_sample*local_L*conj(local_∇L)
+            #Add in interaction terms:
+            l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+            local_L +=l_int
+            local_∇L+=l_int*AUX.Δ
+
+            #Update L∂L* ensemble average:
+            L∂L+=p_sample*local_L*conj(local_∇L)
     
-            #ΔLL:
-            local_Δ=p_sample*conj(AUX.Δ_MPO_sample)
-            ΔLL+=local_Δ
+            #Update ΔLL ensemble average:
+            ΔLL+=p_sample*AUX.Δ
     
             #Mean local Lindbladian:
             mean_local_Lindbladian += p_sample*local_L*conj(local_L)
         end
     end
     mean_local_Lindbladian/=Z
-    ΔLL*=mean_local_Lindbladian
-    return (L∇L-ΔLL)/Z, real(mean_local_Lindbladian)
+    ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
+    ΔLL.*=real(mean_local_Lindbladian)
+    return (L∂L-ΔLL)/Z, real(mean_local_Lindbladian)
 end
 
 
