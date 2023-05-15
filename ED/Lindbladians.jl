@@ -9,7 +9,7 @@ function DQIM(params::parameters, boundary_conditions)
     Returns the matrix Lindblad superoperator for the dissipative transverse field Ising model in 1D
     """
 
-    H_ZZ= two_body_Hamiltonian_term(params, sz, sz, boundary_conditions)
+    H_ZZ= params.J*two_body_Hamiltonian_term(params, sz, sz, boundary_conditions)
     #display(H_ZZ)
     H_X = one_body_Hamiltonian_term(params, sx, boundary_conditions)
     #display(H_X)
@@ -23,7 +23,7 @@ end
 
 function sparse_DQIM(params::parameters, boundary_conditions)
 
-    H_ZZ= two_body_Hamiltonian_term(params, sp_sz, sp_sz, boundary_conditions)
+    H_ZZ= params.J*two_body_Hamiltonian_term(params, sp_sz, sp_sz, boundary_conditions)
     H_X = params.hx*one_body_Hamiltonian_term(params, sp_sx, boundary_conditions)
     H_Z = params.hz*one_body_Hamiltonian_term(params, sp_sz, boundary_conditions)
     L_H = vectorize_Hamiltonian(params, H_ZZ + H_X + H_Z)
@@ -241,4 +241,16 @@ function sparse_XXZ(params::parameters, boundary_conditions)
     L_D = params.γ*single_one_body_Lindbladian_term(1,params,sp_sp) + params.γ*single_one_body_Lindbladian_term(params.N,params,sp_sm)
 
     return L_Hint + L_D
+end
+
+export XYZ_Lindbald
+
+function XYZ_Lindbald(params::parameters, boundary_conditions)
+    H_int = params.Jx*two_body_Hamiltonian_term(params, sx, sx, boundary_conditions) + params.Jy*two_body_Hamiltonian_term(params, sy, sy, boundary_conditions) + params.J*two_body_Hamiltonian_term(params, sz, sz, boundary_conditions)
+    H_X = params.hx*one_body_Hamiltonian_term(params, sx, boundary_conditions)
+    H_Z = params.hz*one_body_Hamiltonian_term(params, sz, boundary_conditions)
+    L_H = vectorize_Hamiltonian(params, H_int+H_X+H_Z)
+    #L_H2 = vectorize_Hamiltonian(params, H_X)
+    L_D = one_body_Lindbladian_term(params, sm, boundary_conditions)
+    return L_H + L_D
 end

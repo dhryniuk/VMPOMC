@@ -39,6 +39,8 @@ include("Samplers/Metropolis.jl")
 
 
 #Optimisers:
+include("Optimisers/gradient.jl")
+
 include("Optimisers/MPS/Exact.jl")
 include("Optimisers/MPS/SGD.jl")
 include("Optimisers/MPS/SR.jl")
@@ -49,12 +51,16 @@ include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
 
+include("Optimisers/MPO/Exact_two_body.jl")
+include("Optimisers/MPO/SGD_two_body.jl")
+include("Optimisers/MPO/SR_two_body.jl")
+
 
 #export calculate_gradient, calculate_MC_gradient_full
 #export SR_calculate_gradient, SR_calculate_MC_gradient_full
 
 
-params=parameters(0,0,0,0,0,0,0,0,0)
+params=parameters(0,0,0,0,0,0,0,0,0,0,0)
 
 #addprocs(10)
 

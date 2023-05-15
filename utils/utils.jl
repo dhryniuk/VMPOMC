@@ -34,6 +34,8 @@ mutable struct parameters
     N::Int64
     dim::Int64
     χ::Int64
+    Jx::Float32
+    Jy::Float32
     J::Float32
     hx::Float32
     hz::Float32
@@ -92,10 +94,12 @@ function make_density_matrix(params, A, basis)
     return ρ
 end
 
-function set_parameters(N,χ,J,hx,hz,γ,α,burn_in)
+function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α,burn_in)
 	params.N = N;
     params.dim = 2^N;
     params.χ = χ;
+    params.Jx = Jx;
+    params.Jy = Jy;
     params.J = J;
     params.hx = hx;
     params.hz = hz;

@@ -43,7 +43,7 @@ function two_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64}, 
         H += foldl(⊗, ops)
     end
 
-    return params.J*H
+    return H#params.J*H
 end
 
 function two_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
@@ -61,7 +61,7 @@ function two_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{Comp
         H += foldl(⊗, ops)
     end
 
-    return params.J*H
+    return H#params.J*H
 end
 
 function vectorize_Hamiltonian(params::parameters, H::Matrix{ComplexF64})

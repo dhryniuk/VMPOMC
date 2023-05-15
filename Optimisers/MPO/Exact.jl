@@ -1,4 +1,4 @@
-export Exact_MPO_gradient#, one_body_Lindblad_term
+#export Exact_MPO_gradient#, one_body_Lindblad_term
 
 
 function bad_one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Complex{<:AbstractFloat}}, A::Array{<:Complex{<:AbstractFloat},3}, 

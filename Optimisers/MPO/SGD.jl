@@ -1,4 +1,4 @@
-export SGD_MPO_gradient, reweighted_SGD_MPO_gradient
+#export SGD_MPO_gradient, reweighted_SGD_MPO_gradient
 
 
 function bad_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)

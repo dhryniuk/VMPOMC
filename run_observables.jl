@@ -18,21 +18,23 @@ import Random
 #Vincentini parameters: γ=1.0, J=0.5, h to be varied.
 
 #Define constants:
+const Jx= 0.0 #interaction strength
+const Jy= 0.0 #interaction strength
 const J = 0.5 #interaction strength
-const hx= 0.25 #transverse field strength
+const hx= 0.3 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
 const α=0
-const N=3
+const N=4
 const dim = 2^N
-χ=4 #bond dimension
+χ=3 #bond dimension
 const burn_in = 0
 
-MPOMC.set_parameters(N,χ,J,hx,hz,γ,α, burn_in)
+MPOMC.set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
 
 #Make single-body Lindbladian:
-const l1 = make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm)
-#const l1 = make_one_body_Lindbladian(h*MPOMC.sx,γ*(MPOMC.sz+1im*MPOMC.sy))
+const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
+#const l1 = ( make_one_body_Lindbladian(-hx*sx-hz*sz,sqrt(γ)*sm) )
 #display(l1)
 
 const basis=generate_bit_basis_reversed(N)
@@ -68,16 +70,19 @@ display(A_init)
 
 #@profview begin
 @time begin
-    for k in 1:300
+    for k in 1:200
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
 
             new_A=zeros(ComplexF64, χ,χ,4)
-            ∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
+
+            ∇,L=gradient("exact",A,l1,MPOMC.params,basis=basis)
+
+            #∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
             #∇,L,acc=SGD_MPO_gradient(A,l1,10*4*χ^2+k,MPOMC.params)
             #∇,L,acc=reweighted_SGD_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,MPOMC.params)#0+50*k)
-            #∇,L,acc=SR_MPO_gradient(A,l1,20*4*χ^2+k,ϵ, MPOMC.params)
+            #∇,L,acc=SR_MPO_gradient(A,l1,10*4*χ^2+k,ϵ, MPOMC.params)
             #∇,L,acc=reweighted_SR_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
             #∇,L=distributed_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,300,0, ϵ)
             #∇,L=SGD_MC_grad_distributed(MPOMC.params,A,l1,25,0)
@@ -86,6 +91,8 @@ display(A_init)
             #display(∇)
             #error()
             ∇./=maximum(abs.(∇))
+            #display(∇)
+            #error()
             new_A = A - δ*F^(k)*∇#.*(1+0.5*rand())
 
             global A = new_A

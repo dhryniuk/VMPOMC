@@ -9,7 +9,8 @@ function sample_update_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<
     conj_G = conj(G)
     avg_G.+= G
     mul!(AUX.plus_S,conj_G,transpose(G))
-    S.+=AUX.plus_S
+    S.+=AUX.plus_S   #use when l1 is unconjugated
+    #S.+=conj(AUX.plus_S)
     return S, avg_G
 end
 
