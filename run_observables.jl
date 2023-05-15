@@ -1,8 +1,8 @@
 using Distributed
 
-#addprocs(4)
-#println(nprocs())
-#println(nworkers())
+addprocs(4)
+println(nprocs())
+println(nworkers())
 
 @everywhere include("MPOMC.jl")
 @everywhere using .MPOMC
@@ -22,12 +22,12 @@ const Jx= 0.0 #interaction strength
 const Jy= 0.0 #interaction strength
 const J = 0.5 #interaction strength
 const hx= 0.3 #transverse field strength
-const hz= 0.0 #transverse field strength
-const γ = 1.0 #spin decay rate
+const hz= 0.2 #transverse field strength
+const γ = 0.1 #spin decay rate
 const α=0
-const N=4
+const N=8
 const dim = 2^N
-χ=3 #bond dimension
+χ=4 #bond dimension
 const burn_in = 0
 
 MPOMC.set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
@@ -37,7 +37,7 @@ const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
 #const l1 = ( make_one_body_Lindbladian(-hx*sx-hz*sz,sqrt(γ)*sm) )
 #display(l1)
 
-const basis=generate_bit_basis_reversed(N)
+#const basis=generate_bit_basis_reversed(N)
 
 
 Random.seed!(1)
@@ -63,7 +63,7 @@ end
 N_MC=2
 Q=1
 F::Float16=0.98
-ϵ::Float16=0.1
+ϵ::Float64=0.1
 β::Float64=0.6
 
 display(A_init)
@@ -77,7 +77,7 @@ display(A_init)
 
             new_A=zeros(ComplexF64, χ,χ,4)
 
-            ∇,L=gradient("exact",A,l1,MPOMC.params,basis=basis)
+            ∇,L,acc=gradient("SR",A,l1,MPOMC.params,N_MC=10*4*χ^2+k,ϵ=ϵ,parallel=true)
 
             #∇,L=Exact_MPO_gradient(A,l1,basis,MPOMC.params)
             #∇,L,acc=SGD_MPO_gradient(A,l1,10*4*χ^2+k,MPOMC.params)

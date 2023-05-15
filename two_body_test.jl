@@ -70,9 +70,12 @@ F=0.97
         acc::Float64=0
         for l in 1:10
             new_A=zeros(ComplexF64, χ,χ,4)
+
+            ∇,L,acc=gradient("SR",A,l1,MPOMC.params,N_MC=10*4*χ^2+k,ϵ=ϵ,parallel=true,l2=l2)
+
             #∇,L=Exact_MPO_gradient_two_body(A,l1,l2,basis,MPOMC.params)
             #∇,L,acc=SGD_MPO_gradient_two_body(A,l1,l2,50*4*χ^2+k,MPOMC.params)
-            ∇,L,acc=SR_MPO_gradient_two_body(A,l1,l2,(10+N)*4*χ^2+k,ϵ,MPOMC.params)
+            #∇,L,acc=SR_MPO_gradient_two_body(A,l1,l2,(10+N)*4*χ^2+k,ϵ,MPOMC.params)
             ∇./=maximum(abs.(∇))
             new_A = A - δ*F^(k)*∇#.*(1+0.5*rand())
 

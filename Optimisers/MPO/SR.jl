@@ -289,7 +289,7 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
     end
     ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
 
-    return [L∂L, ΔLL, mean_local_Lindbladian, S, Left]
+    return [L∂L, ΔLL, mean_local_Lindbladian, S, Left, acceptance]
 end
 
 function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
@@ -307,6 +307,7 @@ function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
     mean_local_Lindbladian=output[3]
     S=output[4]
     Left=output[5]
+    acc=output[6]
 
     mean_local_Lindbladian/=(N_MC*nworkers())
     ΔLL*=mean_local_Lindbladian
@@ -317,5 +318,7 @@ function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
 
     grad = apply_SR(S,Left,N_MC,ϵ,L∂L,ΔLL,params)
 
-    return grad, real(mean_local_Lindbladian), 0
+    acc/=(N_MC*nworkers()*params.N)
+
+    return grad, real(mean_local_Lindbladian), acc
 end
