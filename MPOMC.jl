@@ -39,7 +39,7 @@ include("Optimisers/gradient.jl")
 include("Optimisers/MPS/Exact.jl")
 include("Optimisers/MPS/SGD.jl")
 include("Optimisers/MPS/SR.jl")
-include("Optimisers/MPS/LM.jl")
+#include("Optimisers/MPS/LM.jl")
 
 include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
