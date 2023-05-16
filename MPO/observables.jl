@@ -4,6 +4,16 @@ export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magneti
 export hermetize_MPO, increase_bond_dimension, L_MPO_strings, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 
+function hermetize_MPO(params::parameters, A::Array{ComplexF64})
+    A=reshape(A,params.χ,params.χ,2,2)
+    new_A = deepcopy(A)
+    new_A[:,:,1,2]=0.5*(A[:,:,1,2]+A[:,:,2,1])
+    new_A[:,:,2,1]=conj(new_A[:,:,1,2])
+    new_A[:,:,1,1]=real(new_A[:,:,1,1])
+    new_A[:,:,2,2]=real(new_A[:,:,2,2])
+    return reshape(new_A,params.χ,params.χ,4)#::ComplexF64
+end
+
 function calculate_x_magnetization(params::parameters, A::Array{ComplexF64})
     mp=Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1

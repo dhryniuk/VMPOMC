@@ -9,22 +9,22 @@ function bad_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<
     mean_local_Lindbladian::ComplexF64 = 0
 
     # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample::projector = MPO_Metropolis_burn_in(A, params, AUX)
+    sample::projector = MPO_Metropolis_burn_in(A, params, cache)
     acceptance::UInt64=0
 
     for _ in 1:N_MC
 
-        sample, AUX.R_set, acc = Mono_Metropolis_sweep_left(sample, A, AUX.L_set, params, AUX)
+        sample, cache.R_set, acc = Mono_Metropolis_sweep_left(sample, A, cache.L_set, params, cache)
         acceptance+=acc
         #for n in N_sweeps
         #    sample, L_set = Mono_Metropolis_sweep_right(params, sample, A, R_set)
         #    sample, R_set = Mono_Metropolis_sweep_left(params, sample, A, L_set)
         #end
-        ρ_sample::eltype(A) = tr(AUX.R_set[params.N+1])
-        AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
 
         local_L::ComplexF64 = 0
         local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
@@ -33,12 +33,12 @@ function bad_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<
         #L∇L*:
         for j::UInt8 in 1:params.N
             #1-local part:
-            lL, l∇L = bad_one_body_Lindblad_term(sample,j,l1,A,AUX.L_set,AUX.R_set,params,AUX)
+            lL, l∇L = bad_one_body_Lindblad_term(sample,j,l1,A,cache.L_set,cache.R_set,params,cache)
             local_L += lL
             local_∇L += l∇L
 
             #Update L_set:
-            #mul!(AUX.L_set[j+1], AUX.L_set[j], @view(A[:,:,1+2*sample.ket[j]+sample.bra[j]]))
+            #mul!(cache.L_set[j+1], cache.L_set[j], @view(A[:,:,1+2*sample.ket[j]+sample.bra[j]]))
         end
 
         l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
@@ -46,16 +46,16 @@ function bad_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<
         local_L /=ρ_sample
         local_∇L/=ρ_sample
 
-        AUX.Δ_MPO_sample = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+        cache.Δ_MPO_sample = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Add in interaction terms:
         local_L +=l_int
-        local_∇L+=l_int*AUX.Δ_MPO_sample
+        local_∇L+=l_int*cache.Δ_MPO_sample
 
         L∇L+=local_L*conj(local_∇L)
 
         #ΔLL:
-        local_Δ=conj(AUX.Δ_MPO_sample)
+        local_Δ=conj(cache.Δ_MPO_sample)
         ΔLL+=local_Δ
 
         #Mean local Lindbladian:
@@ -74,11 +74,11 @@ function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Com
     ΔLL::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
     mean_local_Lindbladian::ComplexF64 = 0
 
-    # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    # Preallocate cache:
+    cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample::projector = MPO_Metropolis_burn_in(A, params, AUX)
+    sample::projector = MPO_Metropolis_burn_in(A, params, cache)
     acceptance::UInt64=0
 
     for _ in 1:N_MC
@@ -87,20 +87,20 @@ function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Com
         local_L::ComplexF64 = 0
         local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
         l_int::ComplexF64 = 0
-        AUX.local_∇L_diagonal_coeff = 0
+        cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:
-        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, AUX)
+        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
         acceptance+=acc
 
-        ρ_sample::eltype(A) = tr(AUX.R_set[params.N+1])
-        AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-        AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Calculate L∂L*:
         for j::UInt8 in 1:params.N
             #1-local part:
-            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
             local_L += lL
             local_∇L .+= l∇L
         end
@@ -109,18 +109,18 @@ function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Com
         local_∇L./=ρ_sample
 
         #Add in diagonal part of the local derivative:
-        local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in Ising interaction terms:
         l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
         local_L  +=l_int
-        local_∇L.+=l_int*AUX.Δ
+        local_∇L.+=l_int*cache.Δ
 
         #Update L∂L* ensemble average:
         L∂L.+=local_L*conj(local_∇L)
 
         #Update ΔLL ensemble average:
-        ΔLL.+=AUX.Δ
+        ΔLL.+=cache.Δ
 
         #Mean local Lindbladian:
         mean_local_Lindbladian += local_L*conj(local_L)
@@ -140,11 +140,11 @@ function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractF
     mean_local_Lindbladian::ComplexF64 = 0
     Z::Float64 = 0
 
-    # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    # Preallocate cache:
+    cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample = MPO_Metropolis_burn_in(A, params, AUX)
+    sample = MPO_Metropolis_burn_in(A, params, cache)
     acceptance::UInt64=0
 
     for _ in 1:N_MC
@@ -153,22 +153,22 @@ function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractF
         local_L::ComplexF64 = 0
         local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
         l_int::ComplexF64 = 0
-        AUX.local_∇L_diagonal_coeff = 0
+        cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:
-        sample, acc = reweighted_Mono_Metropolis_sweep_left(β, sample, A, params, AUX)
+        sample, acc = reweighted_Mono_Metropolis_sweep_left(β, sample, A, params, cache)
         acceptance+=acc
 
-        ρ_sample::eltype(A) = tr(AUX.R_set[params.N+1])
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
         p_sample=(ρ_sample*conj(ρ_sample))^(1-β)
         Z+=p_sample
-        AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-        AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #L∇L*:
         for j::UInt8 in 1:params.N
             #1-local part:
-            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
             local_L += lL
             local_∇L += l∇L
         end
@@ -177,17 +177,17 @@ function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractF
         local_∇L/=ρ_sample
 
         #Add in diagonal part of the local derivative:
-        local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
         l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
         local_L +=l_int
-        local_∇L+=l_int*AUX.Δ
+        local_∇L+=l_int*cache.Δ
 
         L∇L+=p_sample*local_L*conj(local_∇L)
 
         #ΔLL:
-        ΔLL.+=AUX.Δ
+        ΔLL.+=cache.Δ
 
         #Mean local Lindbladian:
         mean_local_Lindbladian += p_sample*local_L*conj(local_L)

@@ -1,6 +1,6 @@
 using Distributed
 
-addprocs(4)
+#addprocs(4)
 println(nprocs())
 println(nworkers())
 
@@ -21,11 +21,11 @@ import Random
 const Jx= 0.0 #interaction strength
 const Jy= 0.0 #interaction strength
 const J = 0.5 #interaction strength
-const hx= 0.3 #transverse field strength
-const hz= 0.2 #transverse field strength
-const γ = 0.1 #spin decay rate
+const hx= 0.2 #transverse field strength
+const hz= 0.0 #transverse field strength
+const γ = 1.0 #spin decay rate
 const α=0
-const N=8
+const N=6
 const dim = 2^N
 χ=4 #bond dimension
 const burn_in = 0
@@ -85,14 +85,7 @@ display(A_init)
             #∇,L,acc=SR_MPO_gradient(A,l1,10*4*χ^2+k,ϵ, MPOMC.params)
             #∇,L,acc=reweighted_SR_MPO_gradient(set_beta(k,0.4,0.02),A,l1,10*4*χ^2+k,ϵ, MPOMC.params)#0+50*k)
             #∇,L=distributed_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,300,0, ϵ)
-            #∇,L=SGD_MC_grad_distributed(MPOMC.params,A,l1,25,0)
-            #∇,L=MT_SGD_MC_grad(MPOMC.params,A,l1,5,2)
-            #∇,L=multi_threaded_SR_calculate_MC_gradient_full(MPOMC.params,A,l1,1,0,ϵ) 
-            #display(∇)
-            #error()
             ∇./=maximum(abs.(∇))
-            #display(∇)
-            #error()
             new_A = A - δ*F^(k)*∇#.*(1+0.5*rand())
 
             global A = new_A

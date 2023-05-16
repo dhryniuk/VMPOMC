@@ -4,13 +4,13 @@ function MPO_flatten_index(i::UInt8,j::UInt8,s::UInt8,params::parameters)
     return i+params.χ*(j-1)+params.χ^2*(s-1)
 end
 
-function sample_update_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::parameters, AUX::workspace)
-    G = reshape(AUX.Δ,4*params.χ^2)
+function sample_update_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::parameters, cache::workspace)
+    G = reshape(cache.Δ,4*params.χ^2)
     conj_G = conj(G)
     avg_G.+= G
-    mul!(AUX.plus_S,conj_G,transpose(G))
-    S.+=AUX.plus_S   #use when l1 is unconjugated
-    #S.+=conj(AUX.plus_S)
+    mul!(cache.plus_S,conj_G,transpose(G))
+    S.+=cache.plus_S   #use when l1 is unconjugated
+    #S.+=conj(cache.plus_S)
     return S, avg_G
 end
 
@@ -43,10 +43,10 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
     mean_local_Lindbladian::eltype(A) = 0
 
     # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample::projector = MPO_Metropolis_burn_in(A, params, AUX)
+    sample::projector = MPO_Metropolis_burn_in(A, params, cache)
     acceptance::UInt64=0
 
     # Metric tensor auxiliary arrays:
@@ -59,49 +59,46 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
         local_L::eltype(A) = 0
         local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
         l_int::eltype(A) = 0
-        AUX.local_∇L_diagonal_coeff = 0
+        cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:
-        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, AUX)
+        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
         acceptance+=acc
 
-        ρ_sample::eltype(A) = tr(AUX.R_set[params.N+1])
-        AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-        AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #L∂L*:
         for j::UInt8 in 1:params.N
             #1-local part:
-            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
             local_L  += lL
             local_∇L.+= l∇L
-
-            #Update L_set:
-            #mul!(L_set[j+1], L_set[j], @view(A[:,:,idx(sample,j)]))
         end
 
         local_L /=ρ_sample
         local_∇L/=ρ_sample
 
         #Add in diagonal part of the local derivative:
-        local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
-        l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+        l_int = Lindblad_Ising_interaction_energy(samcacheple, "periodic", A, params)
         local_L +=l_int
-        local_∇L+=l_int*AUX.Δ
+        local_∇L+=l_int*cache.Δ
 
         #Update L∂L* ensemble average:
         L∂L.+=local_L*conj(local_∇L)
 
         #Update ΔLL ensemble average:
-        ΔLL.+=AUX.Δ
+        ΔLL.+=cache.Δ
 
         #Mean local Lindbladian:
         mean_local_Lindbladian += local_L*conj(local_L)
 
         #Update metric tensor:
-        S, Left = sample_update_SR(S, Left, params, AUX)
+        S, Left = sample_update_SR(S, Left, params, cache)
     end
     mean_local_Lindbladian/=N_MC
     ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
@@ -113,12 +110,12 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
     return grad, real(mean_local_Lindbladian), acceptance/(N_MC*params.N)
 end
 
-function reweighted_sample_update_SR(p_sample::Float64, S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::parameters, AUX::workspace)
-    G = reshape(AUX.Δ,4*params.χ^2)
+function reweighted_sample_update_SR(p_sample::Float64, S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::parameters, cache::workspace)
+    G = reshape(cache.Δ,4*params.χ^2)
     conj_G = conj(G)
     avg_G.+= p_sample*G
-    mul!(AUX.plus_S,conj_G,transpose(G))
-    S.+=AUX.plus_S
+    mul!(cache.plus_S,conj_G,transpose(G))
+    S.+=cache.plus_S
     return S, avg_G
 end
 
@@ -151,11 +148,11 @@ function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFl
     mean_local_Lindbladian::eltype(A) = 0
     Z::Float64 = 0
 
-    # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    # Preallocate cache:
+    cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample = MPO_Metropolis_burn_in(A, params, AUX)
+    sample = MPO_Metropolis_burn_in(A, params, cache)
     acceptance::UInt64=0
 
     # Metric tensor auxiliary arrays:
@@ -168,22 +165,22 @@ function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFl
         local_L::ComplexF64 = 0
         local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
         l_int::ComplexF64 = 0
-        AUX.local_∇L_diagonal_coeff = 0
+        cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:
-        sample, acc = reweighted_Mono_Metropolis_sweep_left(β, sample, A, params, AUX)
+        sample, acc = reweighted_Mono_Metropolis_sweep_left(β, sample, A, params, cache)
         acceptance+=acc
 
-        ρ_sample::eltype(A) = tr(AUX.R_set[params.N+1])
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
         p_sample::Float64=(ρ_sample*conj(ρ_sample))^(1-β)
         Z+=p_sample
-        AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-        AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Calculate L∂L*:
         for j::UInt8 in 1:params.N
             #1-local part:
-            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
             local_L += lL
             local_∇L += l∇L
         end
@@ -192,23 +189,23 @@ function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFl
         local_∇L/=ρ_sample
 
         #Add in diagonal part of the local derivative:
-        local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
         l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
         local_L +=l_int
-        local_∇L+=l_int*AUX.Δ
+        local_∇L+=l_int*cache.Δ
 
         L∂L+=p_sample*local_L*conj(local_∇L)
 
         #ΔLL:
-        ΔLL.+=AUX.Δ
+        ΔLL.+=cache.Δ
 
         #Mean local Lindbladian:
         mean_local_Lindbladian += p_sample*local_L*conj(local_L)
 
         #Update metric tensor:
-        S, Left = reweighted_sample_update_SR(p_sample, S, Left, params, AUX)
+        S, Left = reweighted_sample_update_SR(p_sample, S, Left, params, cache)
     end
     mean_local_Lindbladian/=Z
     ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
@@ -230,11 +227,11 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
     ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
     mean_local_Lindbladian::eltype(A) = 0
 
-    # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    # Preallocate cache:
+    cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample = MPO_Metropolis_burn_in(A, params, AUX)
+    sample = MPO_Metropolis_burn_in(A, params, cache)
     acceptance::UInt64=0
 
     # Metric tensor auxiliary arrays:
@@ -247,20 +244,20 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
         local_L::eltype(A) = 0
         local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
         l_int::eltype(A) = 0
-        AUX.local_∇L_diagonal_coeff = 0
+        cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:
-        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, AUX)
+        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
         acceptance+=acc
 
-        ρ_sample::eltype(A) = tr(AUX.R_set[params.N+1])
-        AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-        AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Calculate L∂L*:
         for j::UInt8 in 1:params.N
             #1-local part:
-            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
             local_L  += lL
             local_∇L.+= l∇L
         end
@@ -269,23 +266,23 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
         local_∇L/=ρ_sample
 
         #Add in diagonal part of the local derivative:
-        local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
         l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
         local_L +=l_int
-        local_∇L+=l_int*AUX.Δ
+        local_∇L+=l_int*cache.Δ
 
         L∂L+=local_L*conj(local_∇L)
 
         #ΔLL:
-        ΔLL+=AUX.Δ
+        ΔLL+=cache.Δ
 
         #Mean local Lindbladian:
         mean_local_Lindbladian += local_L*conj(local_L)
 
         #Update metric tensor:
-        S, Left = sample_update_SR(S, Left, params, AUX)
+        S, Left = sample_update_SR(S, Left, params, cache)
     end
     ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
 

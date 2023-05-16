@@ -1,66 +1,32 @@
 #export Exact_MPO_gradient#, one_body_Lindblad_term
 
-
-function bad_one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Complex{<:AbstractFloat}}, A::Array{<:Complex{<:AbstractFloat},3}, 
-    L_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, R_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, params::parameters, AUX::workspace)
+function one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Complex{<:AbstractFloat}}, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
     
     local_L::eltype(A) = 0
     local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
     s::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[j],sample.bra[j])]
-    mul!(AUX.bra_L, s, conj.(l1))
+    #mul!(cache.bra_L, s, conj.(l1))
+    mul!(cache.bra_L, s, l1)
 
     #Iterate over all 4 one-body vectorized basis projectors:
     @inbounds for (i,state) in zip(1:4,TPSC)
-        loc = AUX.bra_L[i]
+        loc = cache.bra_L[i]
         if loc!=0
             #Compute estimator:
-            mul!(AUX.loc_1, L_set[j], @view(A[:,:,i]))
-            mul!(AUX.loc_2, AUX.loc_1, R_set[(params.N+1-j)])
-            local_L += loc.*tr(AUX.loc_2)
-
-            #display(AUX.R_set)
-
-            #Compute derivative:
-            micro_sample::projector = projector(sample)
-            micro_sample.ket[j] = state[1]
-            micro_sample.bra[j] = state[2]
-            AUX.micro_L_set = L_MPO_strings(AUX.micro_L_set, micro_sample, A, params, AUX)
-            AUX.micro_R_set = R_MPO_strings(AUX.micro_R_set, micro_sample, A, params, AUX)
-            local_∇L.+= loc.*∂MPO(micro_sample, AUX.micro_L_set, AUX.micro_R_set, params, AUX)
-        end
-    end
-    return local_L, local_∇L
-end
-
-
-### NEED TO TREAT DIAGONAL SEPARATELY
-function one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Complex{<:AbstractFloat}}, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, AUX::workspace)
-    
-    local_L::eltype(A) = 0
-    local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
-    s::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[j],sample.bra[j])]
-    #mul!(AUX.bra_L, s, conj.(l1))
-    mul!(AUX.bra_L, s, l1)
-
-    #Iterate over all 4 one-body vectorized basis projectors:
-    @inbounds for (i,state) in zip(1:4,TPSC)
-        loc = AUX.bra_L[i]
-        if loc!=0
-            #Compute estimator:
-            mul!(AUX.loc_1, AUX.L_set[j], @view(A[:,:,i]))
-            mul!(AUX.loc_2, AUX.loc_1, AUX.R_set[(params.N+1-j)])
-            local_L += loc.*tr(AUX.loc_2)
+            mul!(cache.loc_1, cache.L_set[j], @view(A[:,:,i]))
+            mul!(cache.loc_2, cache.loc_1, cache.R_set[(params.N+1-j)])
+            local_L += loc.*tr(cache.loc_2)
             
             #Compute derivative:
             if state==(sample.ket[j],sample.bra[j])   #check if diagonal
-                AUX.local_∇L_diagonal_coeff += loc
+                cache.local_∇L_diagonal_coeff += loc
             else
                 micro_sample::projector = projector(sample)
                 micro_sample.ket[j] = state[1]
                 micro_sample.bra[j] = state[2]
-                AUX.micro_L_set = L_MPO_strings(AUX.micro_L_set, micro_sample, A, params, AUX)
-                AUX.micro_R_set = R_MPO_strings(AUX.micro_R_set, micro_sample, A, params, AUX)
-                local_∇L.+= loc.*∂MPO(micro_sample, AUX.micro_L_set, AUX.micro_R_set, params, AUX)
+                cache.micro_L_set = L_MPO_strings(cache.micro_L_set, micro_sample, A, params, cache)
+                cache.micro_R_set = R_MPO_strings(cache.micro_R_set, micro_sample, A, params, cache)
+                local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
             end
         end
     end
@@ -159,15 +125,15 @@ function bad_Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix
     mean_local_Lindbladian::eltype(A) = 0
 
     # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    cache = set_workspace(A,params)
 
     for k in 1:params.dim
         for l in 1:params.dim
             sample = projector(basis[k],basis[l])
-            AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-            AUX.R_set = R_MPO_strings(AUX.R_set, sample,A,params,AUX)
+            cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+            cache.R_set = R_MPO_strings(cache.R_set, sample,A,params,cache)
 
-            ρ_sample = tr(AUX.L_set[params.N+1])
+            ρ_sample = tr(cache.L_set[params.N+1])
             p_sample = ρ_sample*conj(ρ_sample)
             Z += p_sample
 
@@ -175,17 +141,17 @@ function bad_Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix
             local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
             l_int::eltype(A) = 0
 
-            AUX.L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
+            cache.L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
 
             #Calculate L∂L*:
             for j::UInt8 in 1:params.N
                 #1-local part:
-                lL, l∇L = bad_body_Lindblad_term(sample,j,l1,A,AUX.L_set,AUX.R_set,params,AUX)
+                lL, l∇L = bad_body_Lindblad_term(sample,j,l1,A,cache.L_set,cache.R_set,params,cache)
                 local_L += lL
                 local_∇L += l∇L
                 
                 #Update L_set:
-                mul!(AUX.L_set[j+1], AUX.L_set[j], @view(A[:,:,1+2*sample.ket[j]+sample.bra[j]]))
+                mul!(cache.L_set[j+1], cache.L_set[j], @view(A[:,:,1+2*sample.ket[j]+sample.bra[j]]))
             end
 
             l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
@@ -193,16 +159,16 @@ function bad_Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix
             local_L /=ρ_sample
             local_∇L/=ρ_sample
     
-            AUX.Δ_MPO_sample = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+            cache.Δ_MPO_sample = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
             #Add in interaction terms:
             local_L +=l_int
-            local_∇L+=l_int*AUX.Δ_MPO_sample
+            local_∇L+=l_int*cache.Δ_MPO_sample
 
             L∇L+=p_sample*local_L*conj(local_∇L)
     
             #ΔLL:
-            local_Δ=p_sample*conj(AUX.Δ_MPO_sample)
+            local_Δ=p_sample*conj(cache.Δ_MPO_sample)
             ΔLL+=local_Δ
     
             #Mean local Lindbladian:
@@ -222,8 +188,8 @@ function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:C
     Z::eltype(A) = 0
     mean_local_Lindbladian::eltype(A) = 0
 
-    # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    # Preallocate cache:
+    cache = set_workspace(A,params)
 
     for k in 1:params.dim
         for l in 1:params.dim
@@ -232,22 +198,22 @@ function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:C
             local_L::ComplexF64 = 0
             local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
             l_int::ComplexF64 = 0
-            AUX.local_∇L_diagonal_coeff = 0
+            cache.local_∇L_diagonal_coeff = 0
 
             sample = projector(basis[k],basis[l])
-            AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-            AUX.R_set = R_MPO_strings(AUX.R_set, sample,A,params,AUX)
+            cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+            cache.R_set = R_MPO_strings(cache.R_set, sample,A,params,cache)
 
-            ρ_sample = tr(AUX.L_set[params.N+1])
+            ρ_sample = tr(cache.L_set[params.N+1])
             p_sample = ρ_sample*conj(ρ_sample)
             Z += p_sample
 
-            AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+            cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
             #Calculate L∂L*:
             for j::UInt8 in 1:params.N
                 #1-local part:
-                lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+                lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
                 local_L += lL
                 local_∇L += l∇L
             end
@@ -256,18 +222,18 @@ function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:C
             local_∇L/=ρ_sample
 
             #Add in diagonal part of the local derivative:
-            local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+            local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
             #Add in interaction terms:
             l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
             local_L +=l_int
-            local_∇L+=l_int*AUX.Δ
+            local_∇L+=l_int*cache.Δ
 
             #Update L∂L* ensemble average:
             L∂L+=p_sample*local_L*conj(local_∇L)
     
             #Update ΔLL ensemble average:
-            ΔLL+=p_sample*AUX.Δ
+            ΔLL+=p_sample*cache.Δ
     
             #Mean local Lindbladian:
             mean_local_Lindbladian += p_sample*local_L*conj(local_L)

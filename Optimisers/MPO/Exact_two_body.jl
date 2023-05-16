@@ -1,6 +1,6 @@
 #export Exact_MPO_gradient_two_body
 
-function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Array{ComplexF64,3}, params::parameters, AUX::workspace)
+function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Array{ComplexF64,3}, params::parameters, cache::workspace)
     local_L::ComplexF64 = 0
     local_∇L::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
 
@@ -14,26 +14,26 @@ function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Arra
 
             loc::ComplexF64 = bra_L[j+4*(i-1)]
             if loc!=0
-                local_L += loc*tr( (AUX.L_set[k]*A[:,:,i])*A[:,:,j]*AUX.R_set[(params.N-k)])
+                local_L += loc*tr( (cache.L_set[k]*A[:,:,i])*A[:,:,j]*cache.R_set[(params.N-k)])
                 micro_sample::projector = projector(sample)
                 micro_sample.ket[k] = state_i[1]
                 micro_sample.bra[k] = state_i[2]
                 micro_sample.ket[k+1] = state_j[1]
                 micro_sample.bra[k+1] = state_j[2]
                 
-                AUX.micro_L_set = L_MPO_strings(AUX.micro_L_set, micro_sample, A, params, AUX)
-                AUX.micro_R_set = R_MPO_strings(AUX.micro_R_set, micro_sample, A, params, AUX)
-                local_∇L.+= loc.*∂MPO(micro_sample, AUX.micro_L_set, AUX.micro_R_set, params, AUX)
+                cache.micro_L_set = L_MPO_strings(cache.micro_L_set, micro_sample, A, params, cache)
+                cache.micro_R_set = R_MPO_strings(cache.micro_R_set, micro_sample, A, params, cache)
+                local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
             end
         end
     end
     return local_L, local_∇L
 end
 
-function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array{ComplexF64,3}, params::parameters, AUX::workspace)
+function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array{ComplexF64,3}, params::parameters, cache::workspace)
 
     #Need to find middle matrix product, by inverting the first tensor A:
-    M = inv(A[:,:,dINDEX[(sample.ket[1],sample.bra[1])]])*AUX.L_set[params.N]
+    M = inv(A[:,:,dINDEX[(sample.ket[1],sample.bra[1])]])*cache.L_set[params.N]
 
     local_L::ComplexF64 = 0
     local_∇L::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
@@ -56,9 +56,9 @@ function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array
                 micro_sample.ket[params.N] = state_j[1]
                 micro_sample.bra[params.N] = state_j[2]
                 
-                AUX.micro_L_set = L_MPO_strings(AUX.micro_L_set, micro_sample, A, params, AUX)
-                AUX.micro_R_set = R_MPO_strings(AUX.micro_R_set, micro_sample, A, params, AUX)
-                local_∇L.+= loc.*∂MPO(micro_sample, AUX.micro_L_set, AUX.micro_R_set, params, AUX)
+                cache.micro_L_set = L_MPO_strings(cache.micro_L_set, micro_sample, A, params, cache)
+                cache.micro_R_set = R_MPO_strings(cache.micro_R_set, micro_sample, A, params, cache)
+                local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
             end
         end
     end
@@ -73,8 +73,8 @@ function Exact_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::M
     Z::eltype(A) = 0
     mean_local_Lindbladian::eltype(A) = 0
 
-    # Preallocate auxiliary arrays:
-    AUX = set_workspace(A,params)
+    # Preallocate cache:
+    cache = set_workspace(A,params)
 
     for k in 1:params.dim
         for l in 1:params.dim
@@ -83,32 +83,32 @@ function Exact_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::M
             local_L::ComplexF64 = 0
             local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
             l_int::ComplexF64 = 0
-            AUX.local_∇L_diagonal_coeff = 0
+            cache.local_∇L_diagonal_coeff = 0
 
             sample = projector(basis[k],basis[l])
-            AUX.L_set = L_MPO_strings(AUX.L_set, sample,A,params,AUX)
-            AUX.R_set = R_MPO_strings(AUX.R_set, sample,A,params,AUX)
+            cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+            cache.R_set = R_MPO_strings(cache.R_set, sample,A,params,cache)
 
-            ρ_sample = tr(AUX.L_set[params.N+1])
+            ρ_sample = tr(cache.L_set[params.N+1])
             p_sample = ρ_sample*conj(ρ_sample)
             Z += p_sample
 
-            AUX.Δ = ∂MPO(sample, AUX.L_set, AUX.R_set, params, AUX)./ρ_sample
+            cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
             #Calculate L∂L*:
             for j::UInt8 in 1:params.N
                 #1-local part:
-                lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,AUX)
+                lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
                 local_L += lL
                 local_∇L += l∇L
             end
             for j::UInt8 in 1:params.N-1
-                lL, l∇L = two_body_Lindblad_term(sample,j,l2,A,params,AUX)
+                lL, l∇L = two_body_Lindblad_term(sample,j,l2,A,params,cache)
                 local_L += lL
                 local_∇L += l∇L
             end
             if params.N>2
-                lL, l∇L = boundary_two_body_Lindblad_term(sample,l2,A,params,AUX)
+                lL, l∇L = boundary_two_body_Lindblad_term(sample,l2,A,params,cache)
                 local_L += lL
                 local_∇L += l∇L
             end
@@ -117,18 +117,18 @@ function Exact_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::M
             local_∇L/=ρ_sample
 
             #Add in diagonal part of the local derivative:
-            local_∇L.+=AUX.local_∇L_diagonal_coeff.*AUX.Δ
+            local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
             #Add in interaction terms:
             l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
             local_L +=l_int
-            local_∇L+=l_int*AUX.Δ
+            local_∇L+=l_int*cache.Δ
 
             #Update L∂L* ensemble average:
             L∂L+=p_sample*local_L*conj(local_∇L)
     
             #Update ΔLL ensemble average:
-            ΔLL+=p_sample*AUX.Δ
+            ΔLL+=p_sample*cache.Δ
     
             #Mean local Lindbladian:
             mean_local_Lindbladian += p_sample*local_L*conj(local_L)

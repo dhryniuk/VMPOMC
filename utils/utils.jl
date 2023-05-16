@@ -108,6 +108,7 @@ function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α,burn_in)
     params.burn_in = burn_in;
 end
 
+""" Cache which stores intermediate results to reduce memory allocations"""
 mutable struct workspace{T<:Complex{<:AbstractFloat}}
     L_set::Vector{Matrix{T}}
     R_set::Vector{Matrix{T}}
@@ -127,7 +128,7 @@ mutable struct workspace{T<:Complex{<:AbstractFloat}}
 end
 
 function set_workspace(A::Array{<:Complex{<:AbstractFloat}}, params::parameters)
-    AUX = workspace(
+    cache = workspace(
         [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
         [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
         [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
@@ -144,5 +145,5 @@ function set_workspace(A::Array{<:Complex{<:AbstractFloat}}, params::parameters)
         zeros(eltype(A), params.χ, params.χ, 4),
         0.0+0.0im
         )
-    return AUX
+    return cache
 end
