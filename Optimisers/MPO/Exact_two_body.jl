@@ -1,18 +1,18 @@
 #export Exact_MPO_gradient_two_body
 
-function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Array{ComplexF64,3}, params::parameters, cache::workspace)
-    local_L::ComplexF64 = 0
-    local_∇L::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
+function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+    local_L::eltype(A) = 0
+    local_∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
 
-    s1::Matrix{ComplexF64} = dVEC_transpose[(sample.ket[k],sample.bra[k])]
-    s2::Matrix{ComplexF64} = dVEC_transpose[(sample.ket[k+1],sample.bra[k+1])]
+    s1::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[k],sample.bra[k])]
+    s2::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[k+1],sample.bra[k+1])]
     s = kron(s1,s2)
-    bra_L::Matrix{ComplexF64} = s*conj(l2)
+    bra_L::Matrix{eltype(A)} = s*conj(l2)
     #@inbounds for i::UInt16 in 1:4, j::UInt16 in 1:4
     for (i::UInt8,state_i::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
         for (j::UInt8,state_j::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
 
-            loc::ComplexF64 = bra_L[j+4*(i-1)]
+            loc::eltype(A) = bra_L[j+4*(i-1)]
             if loc!=0
                 local_L += loc*tr( (cache.L_set[k]*A[:,:,i])*A[:,:,j]*cache.R_set[(params.N-k)])
                 micro_sample::projector = projector(sample)
@@ -30,23 +30,23 @@ function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Arra
     return local_L, local_∇L
 end
 
-function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array{ComplexF64,3}, params::parameters, cache::workspace)
+function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
 
     #Need to find middle matrix product, by inverting the first tensor A:
     M = inv(A[:,:,dINDEX[(sample.ket[1],sample.bra[1])]])*cache.L_set[params.N]
 
-    local_L::ComplexF64 = 0
-    local_∇L::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
+    local_L::eltype(A) = 0
+    local_∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
 
-    s1::Matrix{ComplexF64} = dVEC_transpose[(sample.ket[params.N],sample.bra[params.N])]
-    s2::Matrix{ComplexF64} = dVEC_transpose[(sample.ket[1],sample.bra[1])]
+    s1::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[params.N],sample.bra[params.N])]
+    s2::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[1],sample.bra[1])]
     s = kron(s1,s2)
-    bra_L::Matrix{ComplexF64} = s*conj(l2)
+    bra_L::Matrix{eltype(A)} = s*conj(l2)
     #@inbounds for i::UInt16 in 1:4, j::UInt16 in 1:4
     for (i::UInt8,state_i::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
         for (j::UInt8,state_j::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
 
-            loc::ComplexF64 = bra_L[j+4*(i-1)]
+            loc::eltype(A) = bra_L[j+4*(i-1)]
             if loc!=0
                 local_L += loc*tr( M*A[:,:,i]*A[:,:,j] )
                 #local_L += loc*MPO(params,sample,A)

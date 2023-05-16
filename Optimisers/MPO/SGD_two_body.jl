@@ -3,9 +3,9 @@
 function SGD_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)
         
     # Define ensemble averages:
-    L∂L::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
-    ΔLL::Array{ComplexF64,3}=zeros(ComplexF64,params.χ,params.χ,4)
-    mean_local_Lindbladian::ComplexF64 = 0
+    L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    mean_local_Lindbladian::eltype(A) = 0
 
     # Preallocate cache:
     cache = set_workspace(A,params)
@@ -17,9 +17,9 @@ function SGD_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::Mat
     for _ in 1:N_MC
 
         #Initialize auxiliary arrays:
-        local_L::ComplexF64 = 0
-        local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
-        l_int::ComplexF64 = 0
+        local_L::eltype(A) = 0
+        local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
+        l_int::eltype(A) = 0
         cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:

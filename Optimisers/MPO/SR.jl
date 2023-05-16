@@ -84,7 +84,7 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
         local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
-        l_int = Lindblad_Ising_interaction_energy(samcacheple, "periodic", A, params)
+        l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
         local_L +=l_int
         local_∇L+=l_int*cache.Δ
 
@@ -162,9 +162,9 @@ function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFl
     for _ in 1:N_MC
 
         #Initialize auxiliary arrays:
-        local_L::ComplexF64 = 0
-        local_∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,4)
-        l_int::ComplexF64 = 0
+        local_L::eltype(A) = 0
+        local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
+        l_int::eltype(A) = 0
         cache.local_∇L_diagonal_coeff = 0
 
         #Generate sample:
