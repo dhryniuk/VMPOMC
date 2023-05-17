@@ -54,6 +54,21 @@ function tensor_calculate_z_magnetization(params::parameters, A::Array{ComplexF6
     return @tensor C[a,a]
 end
 
+export tensor_calculate_magnetization
+
+function tensor_calculate_magnetization(params::parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+    #A=reshape(A,params.χ,params.χ,2,2)
+    B=zeros(ComplexF64,params.χ,params.χ)
+    D=zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b]=A[a,b,c,d]*op[c,d]
+    C=deepcopy(B)
+    for _ in 1:params.N-1
+        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
+        C=deepcopy(D)
+    end
+    return @tensor C[a,a]
+end
+
 function increase_bond_dimension(params::parameters, A::Array{ComplexF64}, step::Int)
     params.χ+=step
     new_A = 0.001*rand(ComplexF64,params.χ,params.χ,4)#2,2)

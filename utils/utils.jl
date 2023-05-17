@@ -44,6 +44,20 @@ mutable struct parameters
     burn_in::Int
 end
 
+Base.display(params::parameters) = begin
+    println("N\t", params.N)
+    println("dim\t", params.dim)
+    println("χ\t", params.χ)
+    println("Jx\t", params.Jx)
+    println("Jy\t", params.Jy)
+    println("J\t", params.J)
+    println("hx\t", params.hx)
+    println("hz\t", params.hz)
+    println("γ\t", params.γ)
+    println("α\t", params.α)
+    println("burn_in\t", params.burn_in)
+end
+
 function flatten_index(i,j,s,p::parameters)
     return i+p.χ*(j-1)+p.χ^2*(s-1)
 end
