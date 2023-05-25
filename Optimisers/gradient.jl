@@ -21,7 +21,12 @@ function gradient(method::String, A::Array{<:Complex{<:AbstractFloat}}, l1::Matr
         end
         if l2==zeros(ComplexF64,1,1)
             if β==1.0
-                return SGD_MPO_gradient(A, l1, N_MC, params)
+                #return SGD_MPO_gradient(A, l1, N_MC, params)
+                if parallel==false
+                    return SGD_MPO_gradient(A, l1, N_MC, ϵparams)
+                else
+                    return distributed_SGD_MPO_gradient(A, l1, N_MC, params)
+                end
             else 
                 return reweighted_SGD_MPO_gradient(β, A, l1, N_MC, params)
             end

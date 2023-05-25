@@ -31,6 +31,14 @@ projector(p::projector) = projector(copy(p.ket), copy(p.bra))
 idx(sample::projector,i::UInt8) = 1+2*sample.ket[i]+sample.bra[i]
 
 
+function MPO(params::parameters, sample::projector, A::Array{ComplexF64})
+    MPO=Matrix{ComplexF64}(I, params.χ, params.χ)
+    for i::UInt8 in 1:params.N
+        MPO*=A[:,:,idx(sample,i)]
+    end
+    return tr(MPO)::ComplexF64
+end
+
 #Left strings of MPOs:
 function L_MPO_strings(L_set, sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
     L_set[1] = cache.ID

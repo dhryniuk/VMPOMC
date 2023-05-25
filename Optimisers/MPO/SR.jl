@@ -21,7 +21,8 @@ function apply_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex
     S./=N_MC
     avg_G./=N_MC
     conj_avg_G = conj(avg_G)
-    S-=avg_G*transpose(conj_avg_G)
+    S-=avg_G*transpose(conj_avg_G) ##THIS IS CORRECT
+    #S-=real.(avg_G)*real.(transpose(conj_avg_G))
 
     #Regularize the metric tensor:
     S+=ϵ*Matrix{Int}(I, params.χ*params.χ*4, params.χ*params.χ*4)
@@ -289,6 +290,93 @@ function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Ma
     return [L∂L, ΔLL, mean_local_Lindbladian, S, Left, acceptance]
 end
 
+function calculate_Kac_norm(d_max, α; offset=0.0) #periodic BCs only!
+    N_K = offset
+    #for i in 1:convert(Int64,floor(N/2))
+    for i in 1:d_max
+        N_K+=1/i^α
+    end
+    return N_K
+end
+
+function LR_one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
+    
+    if mod(params.N,2)==0
+        #error("ONLY ODD NUMBER OF SPINS SUPPORTED ATM")
+    end
+
+    # Define ensemble averages:
+    L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    mean_local_Lindbladian::eltype(A) = 0
+
+    # Preallocate cache:
+    cache = set_workspace(A,params)
+
+    # Initialize sample and L_set for that sample:
+    sample = MPO_Metropolis_burn_in(A, params, cache)
+    acceptance::UInt64=0
+
+    # Metric tensor auxiliary arrays:
+    S::Array{eltype(A),2} = zeros(eltype(A),4*params.χ^2,4*params.χ^2)
+    Left::Array{eltype(A)} = zeros(eltype(A),4*params.χ^2)
+
+    N_K = calculate_Kac_norm(convert(Int64,floor(params.N/2)), params.α)
+
+    #println("KAC = ", N_K)
+
+    for _ in 1:N_MC
+
+        #Initialize auxiliary arrays:
+        local_L::eltype(A) = 0
+        local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
+        l_int::eltype(A) = 0
+        cache.local_∇L_diagonal_coeff = 0
+
+        #Generate sample:
+        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
+        acceptance+=acc
+
+        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
+
+        #Calculate L∂L*:
+        for j::UInt8 in 1:params.N
+            #1-local part:
+            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+            local_L  += lL
+            local_∇L.+= l∇L
+        end
+
+        local_L /=ρ_sample
+        local_∇L/=ρ_sample
+
+        #Add in diagonal part of the local derivative:
+        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
+
+        #Add in interaction terms:
+        l_int = long_range_interaction(sample, A, params)
+        #l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+        local_L +=l_int
+        local_∇L+=l_int*cache.Δ
+
+        L∂L+=local_L*conj(local_∇L)
+
+        #ΔLL:
+        ΔLL+=cache.Δ
+
+        #Mean local Lindbladian:
+        mean_local_Lindbladian += local_L*conj(local_L)
+
+        #Update metric tensor:
+        S, Left = sample_update_SR(S, Left, params, cache)
+    end
+    ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
+
+    return [L∂L, ΔLL, mean_local_Lindbladian, S, Left, acceptance]
+end
+
 function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
     #output = [L∇L, ΔLL, mean_local_Lindbladian, S, Left, Right]
 
@@ -296,7 +384,8 @@ function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
     output = @distributed (+) for i=1:nworkers()
         #sample_with_SR_long_range(p, A, l1, N_MC, N_sweeps)
         #one_worker_SR_MPO_gradient(A, l1, convert(Int64,ceil(N_MC/nworkers())), ϵ, params)
-        one_worker_SR_MPO_gradient(A, l1, N_MC, ϵ, params)
+        LR_one_worker_SR_MPO_gradient(A, l1, N_MC, ϵ, params)
+        #one_worker_SR_MPO_gradient(A, l1, N_MC, ϵ, params)
     end
 
     L∂L=output[1]

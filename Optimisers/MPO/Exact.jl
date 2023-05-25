@@ -49,6 +49,21 @@ function Lindblad_Ising_interaction_energy(sample::projector, boundary_condition
     #return -1.0im*params.J*l_int
 end
 
+function long_range_interaction(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters)
+    l_int_ket::eltype(A) = 0.0
+    l_int_bra::eltype(A) = 0.0
+    l_int::eltype(A) = 0.0
+    for i::Int16 in 1:params.N-1
+        for j::Int16 in i+1:params.N
+            l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
+            l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
+            dist = min(abs(i-j), abs(params.N+i-j))^params.α
+            l_int += (l_int_ket-l_int_bra)/dist
+        end
+    end
+    return 1.0im*params.J*l_int
+end
+
 function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, basis, params::parameters)
     
     # Define ensemble averages:
@@ -94,7 +109,7 @@ function Exact_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:C
             local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
             #Add in interaction terms:
-            l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+            l_int = long_range_interaction(sample, A, params)
             local_L +=l_int
             local_∇L+=l_int*cache.Δ
 

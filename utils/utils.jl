@@ -100,7 +100,7 @@ function make_density_matrix(params, A, basis)
         b=0
         for bra in basis
             b+=1
-            sample = density_matrix(1,ket,bra)
+            sample = projector(ket,bra)
             #ρ_sample = MPO(sample,A)
             ρ[k,b] = MPO(params, sample, A)
         end
