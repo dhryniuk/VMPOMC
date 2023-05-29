@@ -24,10 +24,7 @@ using LinearAlgebra
 import Random
 using MPI
 
-MPI.Init()
-comm = MPI.COMM_WORLD
-root = 0
-nworkers = max(1,MPI.Comm_size(comm) - 1)
+mpi_cache = set_mpi()
 
 #Vincentini parameters: γ=1.0, J=0.5, h to be varied.
 
@@ -41,7 +38,7 @@ const γ = 1.0 #spin decay rate
 const α=3
 const N=8
 const dim = 2^N
-χ=4 #bond dimension
+χ=8 #bond dimension
 const burn_in = 0
 
 MPOMC.set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
@@ -54,7 +51,7 @@ const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
 #const basis=generate_bit_basis_reversed(N)
 
 
-if MPI.Comm_rank(comm) == root
+if mpi_cache.rank == 0
     Random.seed!(0)
     A_init=rand(ComplexF64, χ,χ,2,2)
     A=deepcopy(A_init)
@@ -72,35 +69,34 @@ if MPI.Comm_rank(comm) == root
     acc=0
 else
     #println(MPI.Comm_rank(comm))
-    Random.seed!(MPI.Comm_rank(comm))
+    Random.seed!(mpi_cache.rank)
     A = Array{ComplexF64}(undef, χ,χ,4)
 end
-MPI.Bcast!(A, root, comm)
+MPI.Bcast!(A, 0, mpi_cache.comm)
 
 δ::Float16 = 0.03
 F::Float16=0.99
 ϵ::Float64=0.1
 
 
-
 #@profview begin
 @time begin
     for k in 1:100
-        N_MC = 3*χ^2
+        N_MC = 2*χ^2
         for i in 1:10
 
             par_cache = set_SR_cache(A,MPOMC.params)
-            reduced_one_worker_MPI_SR_MPO_gradient(A,l1,N_MC,ϵ,MPOMC.params,comm,par_cache)
+            reduced_one_worker_MPI_SR_MPO_gradient(A,l1,N_MC,ϵ,MPOMC.params,mpi_cache.comm,par_cache)
 
-            if MPI.Comm_rank(comm) == root
-                global A, L, acc = MPI_SR_MPO_optimize!(par_cache, δ*F^(k), A, N_MC, ϵ, MPOMC.params, nworkers)
+            if mpi_cache.rank == 0
+                global A, L, acc = MPI_SR_MPO_optimize!(par_cache, δ*F^(k), A, N_MC, ϵ, MPOMC.params, mpi_cache.nworkers)
             end
-            MPI.Bcast!(A, root, comm)
+            MPI.Bcast!(A, 0, mpi_cache.comm)
 
         end
 
         #Record observables:
-        if MPI.Comm_rank(comm) == root
+        if mpi_cache.rank == 0
             Af = reshape(A,χ,χ,2,2) 
             Af_dagger = conj.(permutedims(Af,[1,2,4,3]))
 
