@@ -356,8 +356,8 @@ function LR_one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1:
         local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
-        l_int = long_range_interaction(sample, A, params)
-        #l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+        #l_int = long_range_interaction(sample, A, params)/N_K
+        l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
         local_L +=l_int
         local_∇L+=l_int*cache.Δ
 

@@ -6,11 +6,13 @@ using TensorOperations
 using SparseArrays
 using ArnoldiMethod
 using Random
+using MPI
 
 
 
 #Other utilities:
 include("utils/utils.jl")
+include("utils/mpi.jl")
 
 
 #Exact diagonalisation routines:
@@ -44,6 +46,7 @@ include("Optimisers/MPS/SR.jl")
 include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
+include("Optimisers/MPO/MPI_SR.jl")
 
 include("Optimisers/MPO/Exact_two_body.jl")
 include("Optimisers/MPO/SGD_two_body.jl")
