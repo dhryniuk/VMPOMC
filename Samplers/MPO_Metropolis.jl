@@ -8,6 +8,13 @@ function draw_excluded(u::Int8)
     return v
 end
 
+export MetropolisSampler
+
+struct MetropolisSampler
+    N_MC::UInt64
+    burn::UInt64
+end
+
 #Sweeps lattice from right to left
 function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
 
@@ -30,7 +37,34 @@ function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:Abst
         end
         mul!(cache.R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), cache.R_set[params.N+1-i])
         mul!(cache.C_mat, cache.L_set[i], cache.R_set[params.N+2-i])
-        C = tr(cache.C_mat)
+        C = tr(cache.C_mat) #update current probability amplitude
+    end
+    return sample, acc
+end
+
+#Sweeps lattice from left to right
+function Mono_Metropolis_sweep_right(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+
+    acc=0
+    cache.L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
+    cache.C_mat = cache.R_set[params.N+1]
+    C = tr(cache.C_mat) #current probability amplitude
+
+    for i::UInt8 in 1:params.N
+        sample_p = projector(sample)
+        draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
+        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
+        mul!(cache.Metro_1,cache.L_set[i],@view(A[:,:,draw]))
+        mul!(cache.Metro_2,cache.Metro_1,cache.R_set[params.N+1-i])
+        P=tr(cache.Metro_2) #proposal probability amplitude
+        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        if rand() <= metropolis_prob
+            sample = projector(sample_p)
+            acc+=1
+        end
+        mul!(cache.L_set[i+1], cache.L_set[i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]))
+        mul!(cache.C_mat, cache.L_set[i+1], cache.R_set[params.N+1-i])
+        C = tr(cache.C_mat) #update current probability amplitude
     end
     return sample, acc
 end
@@ -104,17 +138,27 @@ function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix,
 end
 """
 
+
 function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
     
     # Initialize random sample and calculate L_set for that sample:
     sample::projector = projector(rand(Bool, params.N),rand(Bool, params.N))
-    cache.L_set = L_MPO_strings(cache.L_set, sample, A, params, cache)
+    cache.L_set = L_MPO_strings!(cache.L_set, sample, A, params, cache)
     
+    #acce1=0
+    #acce2=0
+
     # Perform burn_in:
     for _ in 1:params.burn_in
-        sample, cache.R_set = Mono_Metropolis_sweep_left(params,sample,A,cache.L_set)
-        sample, cache.L_set = Mono_Metropolis_sweep_right(params,sample,A,cache.R_set)
+        sample,_ = Mono_Metropolis_sweep_left(sample,A,params,cache)
+        #acce1+=acc1
+        sample,_ = Mono_Metropolis_sweep_right(sample,A,params,cache)
+        #acce2+=acc2
     end
+
+    #println(acce1)
+    #println(acce2)
+    #error()
 
     return sample#, cache.L_set
 end

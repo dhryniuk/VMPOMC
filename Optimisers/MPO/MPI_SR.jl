@@ -49,7 +49,7 @@ function MPI_SR_MPO_optimize!(output::SR_cache,δ,A, N_MC, ϵ::AbstractFloat,  p
     new_A=zeros(ComplexF64, params.χ,params.χ,4)
     new_A = A - δ*∇
     A = new_A
-    A = normalize_MPO(MPOMC.params, A)
+    A = normalize_MPO!(MPOMC.params, A)
     return A, real(mean_local_Lindbladian), acc
 end
 
@@ -88,7 +88,7 @@ function reduced_one_worker_MPI_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFlo
         #println("rank = $(MPI.Comm_rank(comm)), ", g, ": ", sample)
 
         ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
-        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
         cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Calculate L∂L*:

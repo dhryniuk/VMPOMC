@@ -30,6 +30,8 @@ TPSC = [(1,1),(1,0),(0,1),(0,0)]
 #dINDEX2 = Dict(1 => 1, 0 => 2)
 =#
 
+export parameters
+
 mutable struct parameters
     N::Int64
     dim::Int64

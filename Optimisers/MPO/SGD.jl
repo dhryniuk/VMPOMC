@@ -1,68 +1,110 @@
-#export SGD_MPO_gradient, reweighted_SGD_MPO_gradient
+abstract type Stochastic <: OptimizerCache end
 
-function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)
+mutable struct SGD{T} <: Stochastic
+    #Ensemble averages:
+    L∂L::Array{T,3}
+    ΔLL::Array{T,3}
+
+    #Sums:
+    mlL::T
+    acceptance::UInt64
+
+    #Gradient:
+    ∇::Array{T,3}
+end
+
+function set_SGD(A,params)
+    sgd=SGD(
+        zeros(eltype(A),params.χ,params.χ,4),
+        zeros(eltype(A),params.χ,params.χ,4),
+        convert(eltype(A),0),
+        convert(UInt64,0),
+        zeros(eltype(A),params.χ,params.χ,4)
+    )  
+    return sgd
+end
+
+function ∇!(data::SGD, N_MC::UInt64)
+    data.∇ = (data.L∂L-data.ΔLL)/N_MC
+end
+
+
+function update!(data::Stochastic, sample, A, l1, params::parameters, cache::workspace) #... the ensemble averages etc.
+    #Initialize auxiliary arrays:
+    local_L::eltype(A) = 0
+    local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
+    l_int::eltype(A) = 0
+    cache.local_∇L_diagonal_coeff = 0
+
+    #Generate sample:
+    #sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
+    #data.acceptance+=acc
+
+    ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+    cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
+    cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
+
+    #Calculate L∂L*:
+    for j::UInt8 in 1:params.N
+        #1-local part:
+        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        local_L += lL
+        local_∇L .+= l∇L
+    end
+
+    local_L  /=ρ_sample
+    local_∇L./=ρ_sample
+
+    #Add in diagonal part of the local derivative:
+    local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
+
+    #Add in Ising interaction terms:
+    l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+    local_L  +=l_int
+    local_∇L.+=l_int*cache.Δ
+
+    #Update L∂L* ensemble average:
+    data.L∂L.+=local_L*conj(local_∇L)
+
+    #Update ΔLL ensemble average:
+    data.ΔLL.+=cache.Δ
+
+    #Mean local Lindbladian:
+    data.mlL += local_L*conj(local_L)
+end
+
+
+function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, sampler::MetropolisSampler, params::parameters)
         
-    # Define ensemble averages:
-    L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
-    ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
-    mean_local_Lindbladian::eltype(A) = 0
+    N_MC=sampler.N_MC
 
-    # Preallocate cache:
+    # Preallocate data cache:
+    data = set_SGD(A,params)
+
+    # Preallocate auxiliary work cache:
     cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
     sample::projector = MPO_Metropolis_burn_in(A, params, cache)
-    acceptance::UInt64=0
 
     for _ in 1:N_MC
 
-        #Initialize auxiliary arrays:
-        local_L::eltype(A) = 0
-        local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
-        l_int::eltype(A) = 0
-        cache.local_∇L_diagonal_coeff = 0
-
         #Generate sample:
         sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
-        acceptance+=acc
+        data.acceptance+=acc
 
-        ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
-        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
-        cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
-
-        #Calculate L∂L*:
-        for j::UInt8 in 1:params.N
-            #1-local part:
-            lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
-            local_L += lL
-            local_∇L .+= l∇L
-        end
-
-        local_L  /=ρ_sample
-        local_∇L./=ρ_sample
-
-        #Add in diagonal part of the local derivative:
-        local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
-
-        #Add in Ising interaction terms:
-        l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
-        local_L  +=l_int
-        local_∇L.+=l_int*cache.Δ
-
-        #Update L∂L* ensemble average:
-        L∂L.+=local_L*conj(local_∇L)
-
-        #Update ΔLL ensemble average:
-        ΔLL.+=cache.Δ
-
-        #Mean local Lindbladian:
-        mean_local_Lindbladian += local_L*conj(local_L)
+        #Update data:
+        update!(data, sample, A, l1, params, cache)
 
     end
-    mean_local_Lindbladian/=N_MC
-    ΔLL.=conj.(ΔLL) #remember to take the complex conjugate
-    ΔLL.*=real(mean_local_Lindbladian)
-    return (L∂L-ΔLL)/N_MC, real(mean_local_Lindbladian), acceptance/(N_MC*params.N)
+
+    #Finalize:
+    data.mlL/=N_MC
+    data.ΔLL.=conj.(data.ΔLL) #remember to take the complex conjugate
+    data.ΔLL.*=real(data.mlL)
+    ∇!(data,N_MC)
+
+    return data.∇, data.mlL, data.acceptance/(N_MC*params.N)
 end
 
 
@@ -95,7 +137,7 @@ function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractF
         ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
         p_sample=(ρ_sample*conj(ρ_sample))^(1-β)
         Z+=p_sample
-        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
         cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #L∇L*:
@@ -163,7 +205,7 @@ function one_worker_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
         acceptance+=acc
 
         ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
-        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
         cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Calculate L∂L*:

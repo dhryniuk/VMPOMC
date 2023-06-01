@@ -1,7 +1,7 @@
 export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization, tensor_calculate_z_magnetization, calculate_spin_spin_correlation
 
 #temporary:
-export hermetize_MPO, increase_bond_dimension, L_MPO_strings, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
+export hermetize_MPO, increase_bond_dimension, L_MPO_strings!, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 
 function hermetize_MPO(params::parameters, A::Array{ComplexF64})
@@ -79,7 +79,7 @@ function increase_bond_dimension(params::parameters, A::Array{ComplexF64}, step:
             end
         end
     end
-    new_A./=normalize_MPO(MPOMC.params, new_A)
+    new_A./=normalize_MPO!(MPOMC.params, new_A)
     return new_A
 end
 

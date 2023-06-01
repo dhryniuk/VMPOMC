@@ -81,8 +81,8 @@ F::Float16=0.99
 
 #@profview begin
 @time begin
-    for k in 1:100
-        N_MC = 2*χ^2
+    for k in 1:50
+        N_MC = 1*χ^2
         for i in 1:10
 
             par_cache = set_SR_cache(A,MPOMC.params)

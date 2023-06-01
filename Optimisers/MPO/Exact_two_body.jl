@@ -21,8 +21,8 @@ function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Arra
                 micro_sample.ket[k+1] = state_j[1]
                 micro_sample.bra[k+1] = state_j[2]
                 
-                cache.micro_L_set = L_MPO_strings(cache.micro_L_set, micro_sample, A, params, cache)
-                cache.micro_R_set = R_MPO_strings(cache.micro_R_set, micro_sample, A, params, cache)
+                cache.micro_L_set = L_MPO_strings!(cache.micro_L_set, micro_sample, A, params, cache)
+                cache.micro_R_set = R_MPO_strings!(cache.micro_R_set, micro_sample, A, params, cache)
                 local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
             end
         end
@@ -56,8 +56,8 @@ function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array
                 micro_sample.ket[params.N] = state_j[1]
                 micro_sample.bra[params.N] = state_j[2]
                 
-                cache.micro_L_set = L_MPO_strings(cache.micro_L_set, micro_sample, A, params, cache)
-                cache.micro_R_set = R_MPO_strings(cache.micro_R_set, micro_sample, A, params, cache)
+                cache.micro_L_set = L_MPO_strings!(cache.micro_L_set, micro_sample, A, params, cache)
+                cache.micro_R_set = R_MPO_strings!(cache.micro_R_set, micro_sample, A, params, cache)
                 local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
             end
         end
@@ -86,8 +86,8 @@ function Exact_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::M
             cache.local_∇L_diagonal_coeff = 0
 
             sample = projector(basis[k],basis[l])
-            cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
-            cache.R_set = R_MPO_strings(cache.R_set, sample,A,params,cache)
+            cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
+            cache.R_set = R_MPO_strings!(cache.R_set, sample,A,params,cache)
 
             ρ_sample = tr(cache.L_set[params.N+1])
             p_sample = ρ_sample*conj(ρ_sample)

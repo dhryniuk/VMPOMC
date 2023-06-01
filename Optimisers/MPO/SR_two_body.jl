@@ -31,7 +31,7 @@ function SR_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}}, l1::Matr
         acceptance+=acc
 
         ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
-        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
         cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #L∂L*:
@@ -119,7 +119,7 @@ function one_worker_SR_MPO_gradient_two_body(A::Array{<:Complex{<:AbstractFloat}
         acceptance+=acc
 
         ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
-        cache.L_set = L_MPO_strings(cache.L_set, sample,A,params,cache)
+        cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
         cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
         #Calculate L∂L*:
