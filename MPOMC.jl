@@ -30,14 +30,19 @@ include("MPO/MPO.jl")
 include("MPO/observables.jl")
 
 
+
+#Optimizers:
+include("Optimisers/optimizer.jl")
+
+
+
 #Monte Carlo samplers:
 include("Samplers/MPS_Metropolis.jl")
 include("Samplers/MPO_Metropolis.jl")
 
 
-#Optimizers:
-include("Optimisers/optimizer.jl")
 
+#Optimizer routines:
 include("Optimisers/gradient.jl")
 
 include("Optimisers/MPS/Exact.jl")
@@ -53,7 +58,6 @@ include("Optimisers/MPO/MPI_SR.jl")
 include("Optimisers/MPO/Exact_two_body.jl")
 include("Optimisers/MPO/SGD_two_body.jl")
 include("Optimisers/MPO/SR_two_body.jl")
-
 
 
 

@@ -16,7 +16,12 @@ struct MetropolisSampler
 end
 
 #Sweeps lattice from right to left
-function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+#function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+function Mono_Metropolis_sweep_left(sample::projector, optimizer::Optimizer)
+
+    A = optimizer.A
+    params = optimizer.params
+    cache=optimizer.workspace
 
     acc=0
     cache.R_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
@@ -43,7 +48,12 @@ function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:Abst
 end
 
 #Sweeps lattice from left to right
-function Mono_Metropolis_sweep_right(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+#function Mono_Metropolis_sweep_right(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+function Mono_Metropolis_sweep_right(sample::projector, optimizer::Optimizer)
+
+    A = optimizer.A
+    params = optimizer.params
+    cache=optimizer.workspace
 
     acc=0
     cache.L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
@@ -139,7 +149,12 @@ end
 """
 
 
-function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+#function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+function MPO_Metropolis_burn_in(optimizer::Optimizer)
+
+    A=optimizer.A
+    params=optimizer.params
+    cache=optimizer.workspace
     
     # Initialize random sample and calculate L_set for that sample:
     sample::projector = projector(rand(Bool, params.N),rand(Bool, params.N))
@@ -149,10 +164,12 @@ function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::
     #acce2=0
 
     # Perform burn_in:
-    for _ in 1:params.burn_in
-        sample,_ = Mono_Metropolis_sweep_left(sample,A,params,cache)
+    for _ in 1:optimizer.sampler.burn#params.burn_in
+        sample,_ = Mono_Metropolis_sweep_left(sample,optimizer)
+        sample,_ = Mono_Metropolis_sweep_right(sample,optimizer)
+        #sample,_ = Mono_Metropolis_sweep_left(sample,A,params,cache)
         #acce1+=acc1
-        sample,_ = Mono_Metropolis_sweep_right(sample,A,params,cache)
+        #sample,_ = Mono_Metropolis_sweep_right(sample,A,params,cache)
         #acce2+=acc2
     end
 

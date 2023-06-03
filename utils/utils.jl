@@ -3,6 +3,11 @@ export make_density_matrix, adaptive_step_size
 export dINDEX
 
 
+#Basis type alias:
+Basis = Vector{Vector{Bool}}
+
+
+
 #Useful dictionaries:
 dREVINDEX::Dict{Int8,Tuple{Bool,Bool}} = Dict(1 => (0,0), 2 => (0,1), 3 => (1,0), 4 => (1,1))
 dINDEX::Dict{Tuple{Bool,Bool},Int8} = Dict((0,0) => 1, (0,1) => 2, (1,0) => 3, (1,1) => 4)

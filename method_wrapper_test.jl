@@ -12,17 +12,17 @@ import Random
 #Vincentini parameters: γ=1.0, J=0.5, h to be varied.
 
 #Define constants:
-const Jx= 0.0 #interaction strength
+const Jx= 0.5 #interaction strength
 const Jy= 0.0 #interaction strength
 const J = 0.5 #interaction strength
 const hx= 0.5 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
-const α=3
-const N=4
+const α=0
+const N=6
 const dim = 2^N
-χ=4 #bond dimension
-const burn_in = 10
+χ=6 #bond dimension
+const burn_in = 0
 
 params = parameters(N,dim,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
 
@@ -34,33 +34,59 @@ const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
 const basis=generate_bit_basis_reversed(N)
 
 
+
+function make_two_body_Lindblad_Hamiltonian(A, B)
+    L_H = -1im*( (A⊗id)⊗(B⊗id) - (id⊗transpose(A))⊗(id⊗transpose(B)) )
+    return L_H
+end
+const l2 = Jx*make_two_body_Lindblad_Hamiltonian(sx,sx) + Jy*make_two_body_Lindblad_Hamiltonian(sy,sy)
+
+
+
 list_of_L = Array{Float64}(undef, 0)
 list_of_Mx= Array{ComplexF64}(undef, 0)
 list_of_My= Array{ComplexF64}(undef, 0)
 list_of_Mz= Array{ComplexF64}(undef, 0)
 
-δ::Float16 = 0.03
-F::Float16=0.99
+δ::Float64 = 0.02
+F::Float64=0.99
 ϵ::Float64=0.1
 
 #display(A_init)
 
 Random.seed!(1)
 
-sampler = MetropolisSampler(8*χ^2, 10)
+sampler = MetropolisSampler(10*χ^2, 0)
 #optimizer_cache = Exact(A,params)
-optimizer = Exact(sampler, l1, params)
 
-#@code_warntype Update!(optimizer, projector(rand(Bool,N),rand(Bool,N)))
+#optimizer = Exact(sampler, l1, params)
+#optimizer = Exact(sampler, l1, l2, params)
+#optimizer = SGD(sampler, l1, params)
+#optimizer = SGD(sampler, l1, l2, params)
+#optimizer = SR(sampler, l1, ϵ, params)
+optimizer = SR(sampler, l1, l2, ϵ, params)
+
+#display(optimizer.sampler)
+
+#display(optimizer.A)
+
+#error()
+
+#display(typeof(basis)); error()
+
+#@code_warntype UpdateSR!(optimizer); error()
 #error()
 #@profview begin
 @time begin
-    for k in 1:100
+    for k in 1:200
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
 
-            optimize!(optimizer,basis,δ*F^(k))
+            #Optimize!(optimizer,basis,δ*F^(k))
+            Optimize!(optimizer,δ*F^(k))
+
+            #display(optimizer.A); error()
 
             #new_A=zeros(ComplexF64, χ,χ,4)
             #∇,L=Exact_MPO_gradient(optimizer,basis)
@@ -128,8 +154,8 @@ display(p)
 #display(p)
 """
 
-#L=own_version_DQIM(MPOMC.params,basis)
-L=sparse_DQIM(MPOMC.params, "periodic")
+L = XYZ_Lindbald(params,"periodic")
+#L=sparse_DQIM(params, "periodic")
 #vals, vecs = eigen(L)
 vals, vecs = eigen_sparse(L)
 #display(vals)
@@ -146,14 +172,14 @@ vals, vecs = eigen_sparse(L)
 #vec_basis=construct_vec_density_matrix_basis(MPOMC.params.N)
 
 #Mx=real( own_x_magnetization(ρ,MPOMC.params,vec_basis) )
-Mx=real( magnetization(sx,ρ,MPOMC.params) )
+Mx=real( magnetization(sx,ρ,params) )
 println("True x-magnetization is: ", Mx)
 
-My=real( magnetization(sy,ρ,MPOMC.params) )
+My=real( magnetization(sy,ρ,params) )
 println("True y-magnetization is: ", My)
 
 #Mz=real( own_z_magnetization(ρ,MPOMC.params,vec_basis) )
-Mz=real( magnetization(sz,ρ,MPOMC.params) )
+Mz=real( magnetization(sz,ρ,params) )
 println("True z-magnetization is: ", Mz)
 
 error()

@@ -1,6 +1,7 @@
-abstract type Stochastic <: OptimizerCache end
+export SGD, Optimize!
 
-mutable struct SGD{T} <: Stochastic
+
+mutable struct SGDCache{T} <: StochasticCache
     #Ensemble averages:
     L∂L::Array{T,3}
     ΔLL::Array{T,3}
@@ -13,23 +14,148 @@ mutable struct SGD{T} <: Stochastic
     ∇::Array{T,3}
 end
 
-function set_SGD(A,params)
-    sgd=SGD(
+function SGDCache(A,params)
+    cache=SGDCache(
         zeros(eltype(A),params.χ,params.χ,4),
         zeros(eltype(A),params.χ,params.χ,4),
         convert(eltype(A),0),
         convert(UInt64,0),
         zeros(eltype(A),params.χ,params.χ,4)
     )  
-    return sgd
-end
-
-function ∇!(data::SGD, N_MC::UInt64)
-    data.∇ = (data.L∂L-data.ΔLL)/N_MC
+    return cache
 end
 
 
-function update!(data::Stochastic, sample, A, l1, params::parameters, cache::workspace) #... the ensemble averages etc.
+
+
+abstract type SGD{T} <:  Stochastic{T} end
+
+mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
+
+    #MPO:
+    A::Array{T,3}
+
+    #Sampler:
+    sampler::MetropolisSampler
+
+    #Optimizer:
+    optimizer_cache::SGDCache{T}#Union{ExactCache{T},Nothing}
+
+    #1-local Lindbladian:
+    l1::Matrix{T}
+
+    #Parameters:
+    params::parameters
+
+    #Workspace:
+    workspace::workspace{T}#Union{workspace,Nothing}
+
+end
+
+function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters)
+    A = rand(ComplexF64,params.χ,params.χ,4)
+    #optimizer = Exact(A, sampler, nothing, l1, params, nothing)
+    optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, params, set_workspace(A, params))
+    return optimizer
+end
+
+mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
+
+    #MPO:
+    A::Array{T,3}
+
+    #Sampler:
+    sampler::MetropolisSampler
+
+    #Optimizer:
+    optimizer_cache::SGDCache{T}#Union{ExactCache{T},Nothing}
+
+    #1-local Lindbladian:
+    l1::Matrix{T}
+
+    #2-local Lindbladian:
+    l2::Matrix{T}
+
+    #Parameters:
+    params::parameters
+
+    #Workspace:
+    workspace::workspace{T}#Union{workspace,Nothing}
+
+end
+
+function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::parameters)
+    A = rand(ComplexF64,params.χ,params.χ,4)
+    optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, params, set_workspace(A, params))
+    return optimizer
+end
+
+function Initialize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
+    optimizer.optimizer_cache = SGDCache(optimizer.A, optimizer.params)
+    optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
+end
+
+
+
+function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SGDl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+
+    params=optimizer.params
+    A=optimizer.A
+    l1=optimizer.l1
+    cache = optimizer.workspace
+
+    #Calculate L∂L*:
+    for j::UInt8 in 1:params.N
+        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        local_L += lL
+        local_∇L += l∇L
+    end
+
+    local_L /=ρ_sample
+    local_∇L/=ρ_sample
+
+    return local_L, local_∇L
+end
+
+function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SGDl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+
+    params=optimizer.params
+    A=optimizer.A
+    l1=optimizer.l1
+    l2=optimizer.l2
+    cache = optimizer.workspace
+
+    #Calculate L∂L*:
+    for j::UInt8 in 1:params.N
+        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        local_L += lL
+        local_∇L += l∇L
+    end
+    for j::UInt8 in 1:params.N-1
+        lL, l∇L = two_body_Lindblad_term(sample,j,l2,A,params,cache)
+        local_L += lL
+        local_∇L += l∇L
+    end
+    if params.N>2
+        lL, l∇L = boundary_two_body_Lindblad_term(sample,l2,A,params,cache)
+        local_L += lL
+        local_∇L += l∇L
+    end
+
+    local_L /=ρ_sample
+    local_∇L/=ρ_sample
+
+    return local_L, local_∇L
+end
+
+function Update!(optimizer::Stochastic{T}, sample::projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
+
+    params=optimizer.params
+    A=optimizer.A
+    l1=optimizer.l1
+    data=optimizer.optimizer_cache
+    cache = optimizer.workspace
+
     #Initialize auxiliary arrays:
     local_L::eltype(A) = 0
     local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
@@ -44,6 +170,7 @@ function update!(data::Stochastic, sample, A, l1, params::parameters, cache::wor
     cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
     cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
+    """
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
         #1-local part:
@@ -54,6 +181,8 @@ function update!(data::Stochastic, sample, A, l1, params::parameters, cache::wor
 
     local_L  /=ρ_sample
     local_∇L./=ρ_sample
+    """
+    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer, local_L, local_∇L)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
@@ -73,39 +202,83 @@ function update!(data::Stochastic, sample, A, l1, params::parameters, cache::wor
     data.mlL += local_L*conj(local_L)
 end
 
+function Finalize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
+    N_MC = optimizer.sampler.N_MC
+    data = optimizer.optimizer_cache
 
-function SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, sampler::MetropolisSampler, params::parameters)
-        
-    N_MC=sampler.N_MC
+    data.mlL /= N_MC
+    data.ΔLL .= conj.(data.ΔLL) #remember to take the complex conjugate
+    data.ΔLL .*= data.mlL
+    data.∇ = (data.L∂L-data.ΔLL)/N_MC
+end
 
-    # Preallocate data cache:
-    data = set_SGD(A,params)
+function ComputeGradient!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
 
-    # Preallocate auxiliary work cache:
-    cache = set_workspace(A,params)
+    Initialize!(optimizer)
 
     # Initialize sample and L_set for that sample:
-    sample::projector = MPO_Metropolis_burn_in(A, params, cache)
+    sample = MPO_Metropolis_burn_in(optimizer)
 
-    for _ in 1:N_MC
+    for _ in 1:optimizer.sampler.N_MC
 
         #Generate sample:
-        sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
-        data.acceptance+=acc
+        sample, acc = Mono_Metropolis_sweep_left(sample, optimizer)
+        optimizer.optimizer_cache.acceptance += acc
 
-        #Update data:
-        update!(data, sample, A, l1, params, cache)
-
+        Update!(optimizer, sample) 
     end
-
-    #Finalize:
-    data.mlL/=N_MC
-    data.ΔLL.=conj.(data.ΔLL) #remember to take the complex conjugate
-    data.ΔLL.*=real(data.mlL)
-    ∇!(data,N_MC)
-
-    return data.∇, data.mlL, data.acceptance/(N_MC*params.N)
+    Finalize!(optimizer)
 end
+
+function Optimize!(optimizer::SGD{T}, δ) where {T<:Complex{<:AbstractFloat}}
+
+    ComputeGradient!(optimizer)
+
+    ∇ = optimizer.optimizer_cache.∇
+    ∇./=maximum(abs.(∇))
+
+    new_A = similar(optimizer.A)
+    new_A = optimizer.A - δ*∇
+    optimizer.A = new_A
+    optimizer.A = normalize_MPO!(optimizer.params, optimizer.A)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### TO REWORK LATER:
+
+
+
 
 
 function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)
