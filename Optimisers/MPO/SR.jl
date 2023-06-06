@@ -51,6 +51,9 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
     #1-local Lindbladian:
     l1::Matrix{T}
 
+    #Eigen operations:
+    eigen_ops::EigenOperations
+
     #Parameters:
     params::parameters
     ϵ::Float64
@@ -60,9 +63,17 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
 
 end
 
-function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::parameters)
+#Constructor:
+function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
-    optimizer = SRl1(A, sampler, SRCache(A, params), l1, params, ϵ, set_workspace(A, params))
+    if eigen_op=="Ising"
+        optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), params, ϵ, set_workspace(A, params))
+    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+        @assert params.α>0
+        optimizer = SRl1(A, sampler, SRCache(A, params), l1, LongRangeIsing(params), params, ϵ, set_workspace(A, params))
+    else
+        error("Unrecognized eigen-operation")
+    end
     return optimizer
 end
 
@@ -83,6 +94,9 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
     #2-local Lindbladian:
     l2::Matrix{T}
 
+    #Eigen operations:
+    eigen_ops::EigenOperations
+
     #Parameters:
     params::parameters
     ϵ::Float64
@@ -92,9 +106,17 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
 
 end
 
-function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::parameters)
+#Constructor:
+function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
-    optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, params, ϵ, set_workspace(A, params))
+    if eigen_op=="Ising"
+        optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), params, ϵ, set_workspace(A, params))
+    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+        @assert params.α>0
+        optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, LongRangeIsing(params), params, ϵ, set_workspace(A, params))
+    else
+        error("Unrecognized eigen-operation")
+    end
     return optimizer
 end
 
@@ -103,7 +125,42 @@ function Initialize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
 
+function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
 
+    A = optimizer.A
+    params = optimizer.params
+
+    l_int::eltype(A)=0
+    for j::UInt8 in 1:params.N-1
+        l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
+        l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
+        l_int += l_int_ket-l_int_bra
+    end
+    l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
+    l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
+    l_int += l_int_ket-l_int_bra
+    return 1.0im*params.J*l_int
+    #return -1.0im*params.J*l_int
+end
+
+function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    A = optimizer.A
+    params = optimizer.params
+
+    l_int_ket::eltype(A) = 0.0
+    l_int_bra::eltype(A) = 0.0
+    l_int::eltype(A) = 0.0
+    for i::Int16 in 1:params.N-1
+        for j::Int16 in i+1:params.N
+            l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
+            l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
+            dist = min(abs(i-j), abs(params.N+i-j))^eigen_ops.α
+            l_int += (l_int_ket-l_int_bra)/dist
+        end
+    end
+    return 1.0im*params.J*l_int/eigen_ops.Kac_norm
+end
 
 #### REPLACE WITH HOLY TRAITS ---
 

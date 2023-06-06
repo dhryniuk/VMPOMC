@@ -44,6 +44,9 @@ mutable struct Exactl1{T<:Complex{<:AbstractFloat}} <: Exact{T}
     #1-local Lindbladian:
     l1::Matrix{T}
 
+    #Eigen operations:
+    eigen_ops::EigenOperations
+
     #Parameters:
     params::parameters
 
@@ -52,10 +55,17 @@ mutable struct Exactl1{T<:Complex{<:AbstractFloat}} <: Exact{T}
 
 end
 
-function Exact(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters)
+#Constructor:
+function Exact(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
-    #optimizer = Exact(A, sampler, nothing, l1, params, nothing)
-    optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, params, set_workspace(A, params))
+    if eigen_op=="Ising"
+        optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), params, set_workspace(A, params))
+    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+        @assert params.α>0
+        optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, LongRangeIsing(params), params, set_workspace(A, params))
+    else
+        error("Unrecognized eigen-operation")
+    end
     return optimizer
 end
 
@@ -76,6 +86,9 @@ mutable struct Exactl2{T<:Complex{<:AbstractFloat}} <: Exact{T}
     #2-local Lindbladian:
     l2::Matrix{T}
 
+    #Eigen operations:
+    eigen_ops::EigenOperations
+
     #Parameters:
     params::parameters
 
@@ -84,9 +97,17 @@ mutable struct Exactl2{T<:Complex{<:AbstractFloat}} <: Exact{T}
 
 end
 
-function Exact(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::parameters)
+#Constructor:
+function Exact(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
-    optimizer = Exactl2(A, sampler, ExactCache(A, params), l1, l2, params, set_workspace(A, params))
+    if eigen_op=="Ising"
+        optimizer = Exactl2(A, sampler, ExactCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
+    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+        @assert params.α>0
+        optimizer = Exactl2(A, sampler, ExactCache(A, params), l1, l2, LongRangeIsing(params), params, set_workspace(A, params))
+    else
+        error("Unrecognized eigen-operation")
+    end    
     return optimizer
 end
 
@@ -131,23 +152,30 @@ function one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Comple
     return local_L, local_∇L
 end
 
-function Lindblad_Ising_interaction_energy(sample::projector, boundary_conditions, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters)
+
+function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    A = optimizer.A
+    params = optimizer.params
+
     l_int::eltype(A)=0
     for j::UInt8 in 1:params.N-1
         l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
         l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
         l_int += l_int_ket-l_int_bra
     end
-    if boundary_conditions=="periodic"
-        l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
-        l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
-        l_int += l_int_ket-l_int_bra
-    end
+    l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
+    l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
+    l_int += l_int_ket-l_int_bra
     return 1.0im*params.J*l_int
     #return -1.0im*params.J*l_int
 end
 
-function long_range_interaction(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters)
+function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    A = optimizer.A
+    params = optimizer.params
+
     l_int_ket::eltype(A) = 0.0
     l_int_bra::eltype(A) = 0.0
     l_int::eltype(A) = 0.0
@@ -155,11 +183,11 @@ function long_range_interaction(sample::projector, A::Array{<:Complex{<:Abstract
         for j::Int16 in i+1:params.N
             l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
             l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
-            dist = min(abs(i-j), abs(params.N+i-j))^params.α
+            dist = min(abs(i-j), abs(params.N+i-j))^eigen_ops.α
             l_int += (l_int_ket-l_int_bra)/dist
         end
     end
-    return 1.0im*params.J*l_int
+    return 1.0im*params.J*l_int/eigen_ops.Kac_norm
 end
 
 function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::Exactl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
@@ -282,44 +310,33 @@ function Update!(optimizer::Exact{T}, sample::projector) where {T<:Complex{<:Abs
 
     params=optimizer.params
     A=optimizer.A
-    l1=optimizer.l1
+    #l1=optimizer.l1
     data=optimizer.optimizer_cache
     cache = optimizer.workspace
 
     #Initialize auxiliary arrays:
-    local_L::eltype(A) = 0
-    local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
-    l_int::eltype(A) = 0
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    l_int::T = 0
     cache.local_∇L_diagonal_coeff = 0
 
     cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
     cache.R_set = R_MPO_strings!(cache.R_set, sample,A,params,cache)
 
-    ρ_sample::ComplexF64 = tr(cache.L_set[params.N+1])
-    p_sample::ComplexF64 = ρ_sample*conj(ρ_sample)
+    ρ_sample::T = tr(cache.L_set[params.N+1])
+    p_sample::T = ρ_sample*conj(ρ_sample)
     data.Z += p_sample
 
     cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
-    """
-    #Calculate L∂L*:
-    for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
-        local_L += lL
-        local_∇L += l∇L
-    end
-
-    local_L /=ρ_sample
-    local_∇L/=ρ_sample
-    """
+    #Sweep lattice:
     local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer, local_L, local_∇L)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
     #Add in interaction terms:
-    #l_int = long_range_interaction(sample, A, params)
-    l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+    l_int = Ising_interaction_energy(optimizer.eigen_ops, sample, optimizer)
     local_L +=l_int
     local_∇L+=l_int*cache.Δ
 
@@ -340,26 +357,6 @@ function Finalize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
     data.ΔLL.*=data.mlL
     data.∇ = (data.L∂L-data.ΔLL)/data.Z
 end
-
-"""
-export Exact_MPO_gradient
-
-function Exact_MPO_gradient(optimizer::Exact{T}, basis) where {T<:Complex{<:AbstractFloat}}
-
-    Initialize!(optimizer)
-
-    for k in 1:optimizer.params.dim
-        for l in 1:optimizer.params.dim
-            sample = projector(basis[k],basis[l])
-            Update!(optimizer, sample) 
-        end
-    end
-
-    Finalize!(optimizer)
-
-    return optimizer.optimizer_cache.∇, optimizer.optimizer_cache.mlL
-end
-"""
 
 function compute_gradient!(optimizer::Exact{T}, basis::Basis) where {T<:Complex{<:AbstractFloat}}
 

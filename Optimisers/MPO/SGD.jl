@@ -28,7 +28,7 @@ end
 
 
 
-abstract type SGD{T} <:  Stochastic{T} end
+abstract type SGD{T} <: Stochastic{T} end
 
 mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
 
@@ -44,6 +44,9 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
     #1-local Lindbladian:
     l1::Matrix{T}
 
+    #Eigen operations:
+    eigen_ops::EigenOperations
+
     #Parameters:
     params::parameters
 
@@ -52,10 +55,17 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
 
 end
 
-function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters)
+#Constructor:
+function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
-    #optimizer = Exact(A, sampler, nothing, l1, params, nothing)
-    optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, params, set_workspace(A, params))
+    if eigen_op=="Ising"
+        optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, Ising(), params, set_workspace(A, params))
+    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+        @assert params.α>0
+        optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, LongRangeIsing(params), params, set_workspace(A, params))
+    else
+        error("Unrecognized eigen-operation")
+    end
     return optimizer
 end
 
@@ -76,6 +86,9 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
     #2-local Lindbladian:
     l2::Matrix{T}
 
+    #Eigen operations:
+    eigen_ops::EigenOperations
+
     #Parameters:
     params::parameters
 
@@ -84,9 +97,17 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
 
 end
 
-function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::parameters)
+#Constructor:
+function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
-    optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, params, set_workspace(A, params))
+    if eigen_op=="Ising"
+        optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
+    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+        @assert params.α>0
+        optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, LongRangeIsing(params), params, set_workspace(A, params))
+    else
+        error("Unrecognized eigen-operation")
+    end
     return optimizer
 end
 
@@ -95,7 +116,42 @@ function Initialize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
 
+function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
 
+    A = optimizer.A
+    params = optimizer.params
+
+    l_int::T=0
+    for j::UInt8 in 1:params.N-1
+        l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
+        l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
+        l_int += l_int_ket-l_int_bra
+    end
+    l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
+    l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
+    l_int += l_int_ket-l_int_bra
+    return 1.0im*params.J*l_int
+    #return -1.0im*params.J*l_int
+end
+
+function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    A = optimizer.A
+    params = optimizer.params
+
+    l_int_ket::T = 0.0
+    l_int_bra::T = 0.0
+    l_int::T = 0.0
+    for i::Int16 in 1:params.N-1
+        for j::Int16 in i+1:params.N
+            l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
+            l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
+            dist = min(abs(i-j), abs(params.N+i-j))^eigen_ops.α
+            l_int += (l_int_ket-l_int_bra)/dist
+        end
+    end
+    return 1.0im*params.J*l_int/eigen_ops.Kac_norm
+end
 
 function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SGDl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
@@ -152,43 +208,29 @@ function Update!(optimizer::Stochastic{T}, sample::projector) where {T<:Complex{
 
     params=optimizer.params
     A=optimizer.A
-    l1=optimizer.l1
+    #l1=optimizer.l1
     data=optimizer.optimizer_cache
     cache = optimizer.workspace
 
     #Initialize auxiliary arrays:
-    local_L::eltype(A) = 0
-    local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
-    l_int::eltype(A) = 0
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    l_int::T = 0
     cache.local_∇L_diagonal_coeff = 0
 
-    #Generate sample:
-    #sample, acc = Mono_Metropolis_sweep_left(sample, A, params, cache)
-    #data.acceptance+=acc
-
-    ρ_sample::eltype(A) = tr(cache.R_set[params.N+1])
+    ρ_sample::T = tr(cache.R_set[params.N+1])
     cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
     cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
-    """
-    #Calculate L∂L*:
-    for j::UInt8 in 1:params.N
-        #1-local part:
-        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
-        local_L += lL
-        local_∇L .+= l∇L
-    end
-
-    local_L  /=ρ_sample
-    local_∇L./=ρ_sample
-    """
+    #Sweep lattice:
     local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer, local_L, local_∇L)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
     #Add in Ising interaction terms:
-    l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+    l_int = Ising_interaction_energy(optimizer.eigen_ops, sample, optimizer)
+    #println(l_int); error()
     local_L  +=l_int
     local_∇L.+=l_int*cache.Δ
 
@@ -328,7 +370,8 @@ function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractF
         local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
         #Add in interaction terms:
-        l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+        #l_int = Lindblad_Ising_interaction_energy(sample, "periodic", A, params)
+        l_int = Ising_interaction_energy(optimizer.eigen_ops, sample, optimizer)
         local_L +=l_int
         local_∇L+=l_int*cache.Δ
 

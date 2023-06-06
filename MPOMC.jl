@@ -44,6 +44,7 @@ include("Samplers/MPO_Metropolis.jl")
 
 #Optimizer routines:
 include("Optimisers/gradient.jl")
+include("Optimisers/eigen_operations.jl")
 
 include("Optimisers/MPS/Exact.jl")
 include("Optimisers/MPS/SGD.jl")

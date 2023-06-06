@@ -18,8 +18,8 @@ const J = 0.5 #interaction strength
 const hx= 0.5 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
-const α=0
-const N=6
+const α=1
+const N=4
 const dim = 2^N
 χ=6 #bond dimension
 const burn_in = 0
@@ -56,15 +56,15 @@ F::Float64=0.99
 
 Random.seed!(1)
 
-sampler = MetropolisSampler(10*χ^2, 0)
+sampler = MetropolisSampler(20*χ^2, 0)
 #optimizer_cache = Exact(A,params)
 
-#optimizer = Exact(sampler, l1, params)
-#optimizer = Exact(sampler, l1, l2, params)
-#optimizer = SGD(sampler, l1, params)
-#optimizer = SGD(sampler, l1, l2, params)
-#optimizer = SR(sampler, l1, ϵ, params)
-optimizer = SR(sampler, l1, l2, ϵ, params)
+optimizer = Exact(sampler, l1, params, "Ising")
+#optimizer = Exact(sampler, l1, l2, params, "LRIsing")
+#optimizer = SGD(sampler, l1, params, "LRIsing")
+#optimizer = SGD(sampler, l1, l2, params, "LRIsing")
+#optimizer = SR(sampler, l1, ϵ, params, "LRIsing")
+#optimizer = SR(sampler, l1, l2, ϵ, params, "LRIsing")
 
 #display(optimizer.sampler)
 
@@ -78,13 +78,13 @@ optimizer = SR(sampler, l1, l2, ϵ, params)
 #error()
 #@profview begin
 @time begin
-    for k in 1:200
+    for k in 1:300
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
 
-            #Optimize!(optimizer,basis,δ*F^(k))
-            Optimize!(optimizer,δ*F^(k))
+            Optimize!(optimizer,basis,δ*F^(k))
+            #Optimize!(optimizer,δ*F^(k))
 
             #display(optimizer.A); error()
 
@@ -154,8 +154,8 @@ display(p)
 #display(p)
 """
 
-L = XYZ_Lindbald(params,"periodic")
-#L=sparse_DQIM(params, "periodic")
+#L = XYZ_Lindbald(params,"periodic")
+L=sparse_DQIM(params, "periodic")
 #vals, vecs = eigen(L)
 vals, vecs = eigen_sparse(L)
 #display(vals)
