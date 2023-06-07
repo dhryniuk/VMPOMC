@@ -59,8 +59,8 @@ Random.seed!(1)
 sampler = MetropolisSampler(20*χ^2, 0)
 #optimizer_cache = Exact(A,params)
 
-optimizer = Exact(sampler, l1, params, "Ising")
-#optimizer = Exact(sampler, l1, l2, params, "LRIsing")
+#optimizer = Exact(sampler, l1, params, "Ising")
+optimizer = Exact(sampler, l1, l2, params, "Ising")
 #optimizer = SGD(sampler, l1, params, "LRIsing")
 #optimizer = SGD(sampler, l1, l2, params, "LRIsing")
 #optimizer = SR(sampler, l1, ϵ, params, "LRIsing")
@@ -78,7 +78,7 @@ optimizer = Exact(sampler, l1, params, "Ising")
 #error()
 #@profview begin
 @time begin
-    for k in 1:300
+    for k in 1:100
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
@@ -154,8 +154,8 @@ display(p)
 #display(p)
 """
 
-#L = XYZ_Lindbald(params,"periodic")
-L=sparse_DQIM(params, "periodic")
+L = XYZ_Lindbald(params,"periodic")
+#L=sparse_DQIM(params, "periodic")
 #vals, vecs = eigen(L)
 vals, vecs = eigen_sparse(L)
 #display(vals)

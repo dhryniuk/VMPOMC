@@ -21,15 +21,15 @@ mutable struct SRCache{T} <: StochasticCache
     avg_G::Array{T}
 end
 
-function SRCache(A,params)
+function SRCache(A::Array{T,3},params::parameters) where {T<:Complex{<:AbstractFloat}} 
     cache=SRCache(
-        zeros(eltype(A),params.χ,params.χ,4),
-        zeros(eltype(A),params.χ,params.χ,4),
-        convert(eltype(A),0),
+        zeros(T,params.χ,params.χ,4),
+        zeros(T,params.χ,params.χ,4),
+        convert(T,0),
         convert(UInt64,0),
-        zeros(eltype(A),params.χ,params.χ,4),
-        zeros(eltype(A),4*params.χ^2,4*params.χ^2),
-        zeros(eltype(A),4*params.χ^2)
+        zeros(T,params.χ,params.χ,4),
+        zeros(T,4*params.χ^2,4*params.χ^2),
+        zeros(T,4*params.χ^2)
     )  
     return cache
 end
@@ -167,13 +167,12 @@ end
 function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SRl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
-    A=optimizer.A
-    l1=optimizer.l1
-    cache = optimizer.workspace
+    micro_sample = optimizer.workspace.micro_sample
+    micro_sample = projector(sample)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
         local_L += lL
         local_∇L += l∇L
     end
@@ -187,24 +186,22 @@ end
 function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SRl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
-    A=optimizer.A
-    l1=optimizer.l1
-    l2=optimizer.l2
-    cache = optimizer.workspace
+    micro_sample = optimizer.workspace.micro_sample
+    micro_sample = projector(sample)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
         local_L += lL
         local_∇L += l∇L
     end
     for j::UInt8 in 1:params.N-1
-        lL, l∇L = two_body_Lindblad_term(sample,j,l2,A,params,cache)
+        lL, l∇L = two_body_Lindblad_term(sample,micro_sample,j,optimizer)
         local_L += lL
         local_∇L += l∇L
     end
     if params.N>2
-        lL, l∇L = boundary_two_body_Lindblad_term(sample,l2,A,params,cache)
+        lL, l∇L = boundary_two_body_Lindblad_term(sample,micro_sample,optimizer)
         local_L += lL
         local_∇L += l∇L
     end

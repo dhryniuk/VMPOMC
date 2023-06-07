@@ -1,8 +1,5 @@
 export Exact, Optimize!
 
-#temporary only:
-export Update!
-
 
 mutable struct ExactCache{T} <: OptimizerCache
     #Ensemble averages:
@@ -17,13 +14,13 @@ mutable struct ExactCache{T} <: OptimizerCache
     ∇::Array{T,3}
 end
 
-function ExactCache(A,params)
+function ExactCache(A::Array{T,3},params::parameters) where {T<:Complex{<:AbstractFloat}} 
     exact=ExactCache(
-        zeros(eltype(A),params.χ,params.χ,4),
-        zeros(eltype(A),params.χ,params.χ,4),
-        convert(eltype(A),0),
-        convert(eltype(A),0),
-        zeros(eltype(A),params.χ,params.χ,4)
+        zeros(T,params.χ,params.χ,4),
+        zeros(T,params.χ,params.χ,4),
+        convert(T,0),
+        convert(T,0),
+        zeros(T,params.χ,params.χ,4)
     )  
     return exact
 end
@@ -119,11 +116,16 @@ end
 
 
 
-function one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Complex{<:AbstractFloat}}, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
-    
-    local_L::eltype(A) = 0
-    local_∇L::Array{eltype(A),3} = zeros(eltype(A),params.χ,params.χ,4)
-    s::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[j],sample.bra[j])]
+function one_body_Lindblad_term(sample::projector, micro_sample::projector, j::UInt8, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    l1 = optimizer.l1
+    A = optimizer.A
+    params = optimizer.params
+    cache = optimizer.workspace
+
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    s::Matrix{T} = cache.dVEC_transpose[(sample.ket[j],sample.bra[j])]
     #mul!(cache.bra_L, s, conj.(l1))
     mul!(cache.bra_L, s, l1)
 
@@ -140,12 +142,16 @@ function one_body_Lindblad_term(sample::projector, j::UInt8, l1::Matrix{<:Comple
             if state==(sample.ket[j],sample.bra[j])   #check if diagonal
                 cache.local_∇L_diagonal_coeff += loc
             else
-                micro_sample::projector = projector(sample)
+                #micro_sample = projector(sample)
                 micro_sample.ket[j] = state[1]
                 micro_sample.bra[j] = state[2]
                 cache.micro_L_set = L_MPO_strings!(cache.micro_L_set, micro_sample, A, params, cache)
                 cache.micro_R_set = R_MPO_strings!(cache.micro_R_set, micro_sample, A, params, cache)
                 local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
+
+                #Restore original micro_sample with minimum allocations:
+                micro_sample.ket[j] = sample.ket[j]
+                micro_sample.bra[j] = sample.bra[j]
             end
         end
     end
@@ -158,7 +164,7 @@ function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer
     A = optimizer.A
     params = optimizer.params
 
-    l_int::eltype(A)=0
+    l_int::T = 0
     for j::UInt8 in 1:params.N-1
         l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
         l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
@@ -176,9 +182,9 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, 
     A = optimizer.A
     params = optimizer.params
 
-    l_int_ket::eltype(A) = 0.0
-    l_int_bra::eltype(A) = 0.0
-    l_int::eltype(A) = 0.0
+    l_int_ket::T = 0
+    l_int_bra::T = 0
+    l_int::T = 0
     for i::Int16 in 1:params.N-1
         for j::Int16 in i+1:params.N
             l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
@@ -192,14 +198,13 @@ end
 
 function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::Exactl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
-    params=optimizer.params
-    A=optimizer.A
-    l1=optimizer.l1
-    cache = optimizer.workspace
+    params = optimizer.params
+    micro_sample = optimizer.workspace.micro_sample
+    micro_sample = projector(sample)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
         local_L += lL
         local_∇L += l∇L
     end
@@ -210,22 +215,28 @@ function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::Exactl1{T}, 
     return local_L, local_∇L
 end
 
-function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
-    local_L::eltype(A) = 0
-    local_∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+function two_body_Lindblad_term(sample::projector, micro_sample::projector, k::UInt8, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
+#function two_body_Lindblad_term(sample::projector, k::UInt8, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
 
-    s1::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[k],sample.bra[k])]
-    s2::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[k+1],sample.bra[k+1])]
+    l2 = optimizer.l2
+    A = optimizer.A
+    params = optimizer.params
+    cache = optimizer.workspace
+
+    local_L::T = 0
+    local_∇L::Array{T,3}=zeros(T,params.χ,params.χ,4)
+
+    s1::Matrix{T} = cache.dVEC_transpose[(sample.ket[k],sample.bra[k])]
+    s2::Matrix{T} = cache.dVEC_transpose[(sample.ket[k+1],sample.bra[k+1])]
     s = kron(s1,s2)
-    bra_L::Matrix{eltype(A)} = s*conj(l2)
+    bra_L::Matrix{T} = s*conj(l2)
     #@inbounds for i::UInt16 in 1:4, j::UInt16 in 1:4
     for (i::UInt8,state_i::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
         for (j::UInt8,state_j::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
 
-            loc::eltype(A) = bra_L[j+4*(i-1)]
+            loc::T = bra_L[j+4*(i-1)]
             if loc!=0
                 local_L += loc*tr( (cache.L_set[k]*A[:,:,i])*A[:,:,j]*cache.R_set[(params.N-k)])
-                micro_sample::projector = projector(sample)
                 micro_sample.ket[k] = state_i[1]
                 micro_sample.bra[k] = state_i[2]
                 micro_sample.ket[k+1] = state_j[1]
@@ -234,33 +245,45 @@ function two_body_Lindblad_term(sample::projector, k::UInt8, l2::Matrix, A::Arra
                 cache.micro_L_set = L_MPO_strings!(cache.micro_L_set, micro_sample, A, params, cache)
                 cache.micro_R_set = R_MPO_strings!(cache.micro_R_set, micro_sample, A, params, cache)
                 local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
+
+                #Restore original micro_sample with minimum allocations:
+                micro_sample.ket[k] = sample.ket[k]
+                micro_sample.bra[k] = sample.bra[k]
+                micro_sample.ket[k+1] = sample.ket[k+1]
+                micro_sample.bra[k+1] = sample.bra[k+1]
             end
         end
     end
     return local_L, local_∇L
 end
 
-function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+#function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+function boundary_two_body_Lindblad_term(sample::projector, micro_sample::projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
+#function boundary_two_body_Lindblad_term(sample::projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    l2 = optimizer.l2
+    A = optimizer.A
+    params = optimizer.params
+    cache = optimizer.workspace
 
     #Need to find middle matrix product, by inverting the first tensor A:
     M = inv(A[:,:,dINDEX[(sample.ket[1],sample.bra[1])]])*cache.L_set[params.N]
 
-    local_L::eltype(A) = 0
-    local_∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
+    local_L::T = 0
+    local_∇L::Array{T,3}=zeros(T,params.χ,params.χ,4)
 
-    s1::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[params.N],sample.bra[params.N])]
-    s2::Matrix{eltype(A)} = dVEC_transpose[(sample.ket[1],sample.bra[1])]
+    s1::Matrix{T} = cache.dVEC_transpose[(sample.ket[params.N],sample.bra[params.N])]
+    s2::Matrix{T} = cache.dVEC_transpose[(sample.ket[1],sample.bra[1])]
     s = kron(s1,s2)
-    bra_L::Matrix{eltype(A)} = s*conj(l2)
+    bra_L::Matrix{T} = s*conj(l2)
     #@inbounds for i::UInt16 in 1:4, j::UInt16 in 1:4
     for (i::UInt8,state_i::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
         for (j::UInt8,state_j::Tuple{Bool,Bool}) in zip(1:4,TPSC::Vector{Tuple{Bool,Bool}})
 
-            loc::eltype(A) = bra_L[j+4*(i-1)]
+            loc::T = bra_L[j+4*(i-1)]
             if loc!=0
                 local_L += loc*tr( M*A[:,:,i]*A[:,:,j] )
                 #local_L += loc*MPO(params,sample,A)
-                micro_sample::projector = projector(sample)
                 micro_sample.ket[1] = state_i[1]
                 micro_sample.bra[1] = state_i[2]
                 micro_sample.ket[params.N] = state_j[1]
@@ -269,6 +292,12 @@ function boundary_two_body_Lindblad_term(sample::projector, l2::Matrix, A::Array
                 cache.micro_L_set = L_MPO_strings!(cache.micro_L_set, micro_sample, A, params, cache)
                 cache.micro_R_set = R_MPO_strings!(cache.micro_R_set, micro_sample, A, params, cache)
                 local_∇L.+= loc.*∂MPO(micro_sample, cache.micro_L_set, cache.micro_R_set, params, cache)
+
+                #Restore original micro_sample with minimum allocations:
+                micro_sample.ket[1] = sample.ket[1]
+                micro_sample.bra[1] = sample.bra[1]
+                micro_sample.ket[params.N] = sample.ket[params.N]
+                micro_sample.bra[params.N] = sample.bra[params.N]
             end
         end
     end
@@ -278,24 +307,22 @@ end
 function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::Exactl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
-    A=optimizer.A
-    l1=optimizer.l1
-    l2=optimizer.l2
-    cache = optimizer.workspace
+    micro_sample = optimizer.workspace.micro_sample
+    micro_sample = projector(sample)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,j,l1,A,params,cache)
+        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
         local_L += lL
         local_∇L += l∇L
     end
     for j::UInt8 in 1:params.N-1
-        lL, l∇L = two_body_Lindblad_term(sample,j,l2,A,params,cache)
+        lL, l∇L = two_body_Lindblad_term(sample,micro_sample,j,optimizer)
         local_L += lL
         local_∇L += l∇L
     end
     if params.N>2
-        lL, l∇L = boundary_two_body_Lindblad_term(sample,l2,A,params,cache)
+        lL, l∇L = boundary_two_body_Lindblad_term(sample,micro_sample,optimizer)
         local_L += lL
         local_∇L += l∇L
     end

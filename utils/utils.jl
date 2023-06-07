@@ -35,35 +35,7 @@ TPSC = [(1,1),(1,0),(0,1),(0,0)]
 #dINDEX2 = Dict(1 => 1, 0 => 2)
 =#
 
-export parameters
 
-mutable struct parameters
-    N::Int64
-    dim::Int64
-    χ::Int64
-    Jx::Float32
-    Jy::Float32
-    J::Float32
-    hx::Float32
-    hz::Float32
-    γ::Float32
-    α::Int
-    burn_in::Int
-end
-
-Base.display(params::parameters) = begin
-    println("N\t", params.N)
-    println("dim\t", params.dim)
-    println("χ\t", params.χ)
-    println("Jx\t", params.Jx)
-    println("Jy\t", params.Jy)
-    println("J\t", params.J)
-    println("hx\t", params.hx)
-    println("hz\t", params.hz)
-    println("γ\t", params.γ)
-    println("α\t", params.α)
-    println("burn_in\t", params.burn_in)
-end
 
 function flatten_index(i,j,s,p::parameters)
     return i+p.χ*(j-1)+p.χ^2*(s-1)
@@ -115,56 +87,3 @@ function make_density_matrix(params, A, basis)
     return ρ
 end
 
-function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α,burn_in)
-	params.N = N;
-    params.dim = 2^N;
-    params.χ = χ;
-    params.Jx = Jx;
-    params.Jy = Jy;
-    params.J = J;
-    params.hx = hx;
-    params.hz = hz;
-    params.γ = γ;
-    params.α = α;
-    params.burn_in = burn_in;
-end
-
-""" Cache which stores intermediate results to reduce memory allocations"""
-mutable struct workspace{T<:Complex{<:AbstractFloat}}
-    L_set::Vector{Matrix{T}}
-    R_set::Vector{Matrix{T}}
-    micro_L_set::Vector{Matrix{T}}
-    micro_R_set::Vector{Matrix{T}}
-    plus_S::Array{T,2}
-    B::Matrix{T}
-    ID::Matrix{T}
-    loc_1::Matrix{T}
-    loc_2::Matrix{T}
-    Metro_1::Matrix{T}
-    Metro_2::Matrix{T}
-    C_mat::Matrix{T}
-    bra_L::Matrix{T}
-    Δ::Array{T,3} #tensor of derivatives
-    local_∇L_diagonal_coeff::ComplexF64
-end
-
-function set_workspace(A::Array{<:Complex{<:AbstractFloat}}, params::parameters)
-    cache = workspace(
-        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
-        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
-        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
-        [ Matrix{eltype(A)}(undef,params.χ,params.χ) for _ in 1:params.N+1 ],
-        zeros(eltype(A), 4*params.χ^2,4*params.χ^2),
-        zeros(eltype(A), params.χ,params.χ),
-        Matrix{eltype(A)}(I, params.χ, params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), params.χ,params.χ),
-        zeros(eltype(A), 1, 4),
-        zeros(eltype(A), params.χ, params.χ, 4),
-        0.0+0.0im
-        )
-    return cache
-end

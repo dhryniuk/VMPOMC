@@ -11,6 +11,9 @@ using MPI
 
 
 #Other utilities:
+include("utils/projector.jl")
+include("utils/parameters.jl")
+include("utils/workspace.jl")
 include("utils/utils.jl")
 include("utils/mpi.jl")
 
@@ -56,9 +59,9 @@ include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
 include("Optimisers/MPO/MPI_SR.jl")
 
-include("Optimisers/MPO/Exact_two_body.jl")
-include("Optimisers/MPO/SGD_two_body.jl")
-include("Optimisers/MPO/SR_two_body.jl")
+#include("Optimisers/MPO/Exact_two_body.jl")
+#include("Optimisers/MPO/SGD_two_body.jl")
+#include("Optimisers/MPO/SR_two_body.jl")
 
 
 
