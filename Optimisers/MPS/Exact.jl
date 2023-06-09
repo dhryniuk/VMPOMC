@@ -1,6 +1,6 @@
 export Exact_MPS_gradient
 
-function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::UInt16, h1::Matrix, A::Array, 
+function one_body_Hamiltonian_term(params::Parameters, sample::Vector{Bool}, j::UInt16, h1::Matrix, A::Array, 
     L_set::Union{Vector{Matrix{Float64}},Vector{Matrix{ComplexF64}}}, 
     R_set::Union{Vector{Matrix{Float64}},Vector{Matrix{ComplexF64}}})
     energy = 0
@@ -15,7 +15,7 @@ function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::
     return energy
 end
 
-function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::UInt16, h1::Matrix, A::Array, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+function one_body_Hamiltonian_term(params::Parameters, sample::Vector{Bool}, j::UInt16, h1::Matrix, A::Array, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
     energy::ComplexF64 = 0
     s = dVEC2[sample[j]]
     bra_L = transpose(s)*h1
@@ -29,7 +29,7 @@ function one_body_Hamiltonian_term(params::parameters, sample::Vector{Bool}, j::
 end
 
 
-function Ising_interaction_energy(params::parameters, sample::Vector{Bool}, boundary_conditions)
+function Ising_interaction_energy(params::Parameters, sample::Vector{Bool}, boundary_conditions)
     if params.N==1
         return 0
     else
@@ -44,7 +44,7 @@ function Ising_interaction_energy(params::parameters, sample::Vector{Bool}, boun
     end
 end
 
-function Ising_interaction_energy_2D(params::parameters, sample::Vector{Bool})
+function Ising_interaction_energy_2D(params::Parameters, sample::Vector{Bool})
 
     if params.N>=9
         energy=0
@@ -66,7 +66,7 @@ end
 
 export Exact_MPS_energy
 
-function Exact_MPS_energy(params::parameters, A::Array{Float64}, basis, h1::Matrix)
+function Exact_MPS_energy(params::Parameters, A::Array{Float64}, basis, h1::Matrix)
     Z=0
     mean_local_Hamiltonian::Float64 = 0
 
@@ -104,7 +104,7 @@ function Exact_MPS_energy(params::parameters, A::Array{Float64}, basis, h1::Matr
     return mean_local_Hamiltonian/=Z
 end
 
-function Exact_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Matrix)
+function Exact_MPS_gradient(params::Parameters, A::Array{Float64}, basis, h1::Matrix)
     L∇L::Array{Float64,3}=zeros(Float64,params.χ,params.χ,2) #coupled product
     ΔLL::Array{Float64,3}=zeros(Float64,params.χ,params.χ,2) #uncoupled product
     Z=0
@@ -165,7 +165,7 @@ function Exact_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Ma
     return (L∇L-ΔLL)/Z, mean_local_Hamiltonian, 0
 end
 
-function Exact_MPS_gradient(params::parameters, A::Array{ComplexF64}, basis, h1::Matrix)
+function Exact_MPS_gradient(params::Parameters, A::Array{ComplexF64}, basis, h1::Matrix)
     L∇L=zeros(ComplexF64,params.χ,params.χ,2) #coupled product
     ΔLL=zeros(ComplexF64,params.χ,params.χ,2) #uncoupled product
     Z=0

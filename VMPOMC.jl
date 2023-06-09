@@ -1,4 +1,4 @@
-module MPOMC
+module VMPOMC
 
 using LinearAlgebra
 using Distributed
@@ -10,7 +10,7 @@ using MPI
 
 
 
-#Other utilities:
+#Basic utilities:
 include("utils/projector.jl")
 include("utils/parameters.jl")
 include("utils/workspace.jl")
@@ -26,17 +26,15 @@ include("ED/operators.jl")
 include("ED/observables.jl")
 include("ED/utils.jl")
 
-
+ 
 #MPS/MPO backend:
 include("MPO/MPS.jl")
 include("MPO/MPO.jl")
 include("MPO/observables.jl")
 
 
-
 #Optimizers:
 include("Optimisers/optimizer.jl")
-
 
 
 #Monte Carlo samplers:
@@ -44,10 +42,10 @@ include("Samplers/MPS_Metropolis.jl")
 include("Samplers/MPO_Metropolis.jl")
 
 
-
 #Optimizer routines:
 include("Optimisers/gradient.jl")
 include("Optimisers/eigen_operations.jl")
+include("Optimisers/MPO/common.jl")
 
 include("Optimisers/MPS/Exact.jl")
 include("Optimisers/MPS/SGD.jl")
@@ -58,10 +56,6 @@ include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
 include("Optimisers/MPO/MPI_SR.jl")
-
-#include("Optimisers/MPO/Exact_two_body.jl")
-#include("Optimisers/MPO/SGD_two_body.jl")
-#include("Optimisers/MPO/SR_two_body.jl")
 
 
 

@@ -16,8 +16,8 @@ struct MetropolisSampler
 end
 
 #Sweeps lattice from right to left
-#function Mono_Metropolis_sweep_left(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
-function Mono_Metropolis_sweep_left(sample::projector, optimizer::Optimizer)
+#function Mono_Metropolis_sweep_left(sample::Projector, A::Array{<:Complex{<:AbstractFloat},3}, params::Parameters, cache::Workspace)
+function Mono_Metropolis_sweep_left(sample::Projector, optimizer::Optimizer)
 
     A = optimizer.A
     params = optimizer.params
@@ -29,7 +29,7 @@ function Mono_Metropolis_sweep_left(sample::projector, optimizer::Optimizer)
     C = tr(cache.C_mat) #current probability amplitude
 
     for i::UInt8 in params.N:-1:1
-        sample_p = projector(sample)
+        sample_p = Projector(sample)
         draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
         (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
         mul!(cache.Metro_1,cache.L_set[i],@view(A[:,:,draw]))
@@ -37,7 +37,7 @@ function Mono_Metropolis_sweep_left(sample::projector, optimizer::Optimizer)
         P=tr(cache.Metro_2) #proposal probability amplitude
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         if rand() <= metropolis_prob
-            sample = projector(sample_p)
+            sample = Projector(sample_p)
             acc+=1
         end
         mul!(cache.R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), cache.R_set[params.N+1-i])
@@ -48,8 +48,8 @@ function Mono_Metropolis_sweep_left(sample::projector, optimizer::Optimizer)
 end
 
 #Sweeps lattice from left to right
-#function Mono_Metropolis_sweep_right(sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
-function Mono_Metropolis_sweep_right(sample::projector, optimizer::Optimizer)
+#function Mono_Metropolis_sweep_right(sample::Projector, A::Array{<:Complex{<:AbstractFloat},3}, params::Parameters, cache::Workspace)
+function Mono_Metropolis_sweep_right(sample::Projector, optimizer::Optimizer)
 
     A = optimizer.A
     params = optimizer.params
@@ -61,7 +61,7 @@ function Mono_Metropolis_sweep_right(sample::projector, optimizer::Optimizer)
     C = tr(cache.C_mat) #current probability amplitude
 
     for i::UInt8 in 1:params.N
-        sample_p = projector(sample)
+        sample_p = Projector(sample)
         draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
         (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
         mul!(cache.Metro_1,cache.L_set[i],@view(A[:,:,draw]))
@@ -69,7 +69,7 @@ function Mono_Metropolis_sweep_right(sample::projector, optimizer::Optimizer)
         P=tr(cache.Metro_2) #proposal probability amplitude
         metropolis_prob = real((P*conj(P))/(C*conj(C)))
         if rand() <= metropolis_prob
-            sample = projector(sample_p)
+            sample = Projector(sample_p)
             acc+=1
         end
         mul!(cache.L_set[i+1], cache.L_set[i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]))
@@ -79,7 +79,7 @@ function Mono_Metropolis_sweep_right(sample::projector, optimizer::Optimizer)
     return sample, acc
 end
 
-function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::projector, A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::Projector, A::Array{<:Complex{<:AbstractFloat},3}, params::Parameters, cache::Workspace)
 
     acc=0
 
@@ -89,7 +89,7 @@ function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::projector, A
     C = tr(cache.C_mat)
 
     for i::UInt8 in params.N:-1:1
-        sample_p = projector(sample)
+        sample_p = Projector(sample)
         draw = draw_excluded(dINDEX[(sample.ket[i],sample.bra[i])])
         (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[draw]
         mul!(cache.Metro_1,cache.L_set[i],@view(A[:,:,draw]))
@@ -97,7 +97,7 @@ function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::projector, A
         P=tr(cache.Metro_2)
         metropolis_prob = real((P*conj(P)))^(β)/real((C*conj(C)))^(β)
         if rand() <= metropolis_prob
-            sample = projector(sample_p) #replace with =sample_p?
+            sample = Projector(sample_p) #replace with =sample_p?
             acc+=1
         end
         mul!(cache.R_set[params.N+2-i], @view(A[:,:,1+2*sample.ket[i]+sample.bra[i]]), cache.R_set[params.N+1-i])
@@ -108,7 +108,7 @@ function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::projector, A
 end
 
 """
-function Mono_Metropolis_sweep_right(params::parameters, sample::density_matrix, A::Array{ComplexF64}, R_set::Vector{Matrix{ComplexF64}})
+function Mono_Metropolis_sweep_right(params::Parameters, sample::density_matrix, A::Array{ComplexF64}, R_set::Vector{Matrix{ComplexF64}})
 
     function draw_excluded(u)
         v = rand(1:3)
@@ -149,7 +149,7 @@ end
 """
 
 
-#function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::parameters, cache::workspace)
+#function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::Parameters, cache::Workspace)
 function MPO_Metropolis_burn_in(optimizer::Optimizer)
 
     A=optimizer.A
@@ -157,7 +157,7 @@ function MPO_Metropolis_burn_in(optimizer::Optimizer)
     cache=optimizer.workspace
     
     # Initialize random sample and calculate L_set for that sample:
-    sample::projector = projector(rand(Bool, params.N),rand(Bool, params.N))
+    sample::Projector = Projector(rand(Bool, params.N),rand(Bool, params.N))
     cache.L_set = L_MPO_strings!(cache.L_set, sample, A, params, cache)
     
     #acce1=0

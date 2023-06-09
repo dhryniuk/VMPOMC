@@ -1,6 +1,6 @@
 export SR_MPS_gradient
 
-function SR_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, ϵ::Float64, h1::Matrix)
+function SR_MPS_gradient(params::Parameters, A::Array{Float64}, N_MC::Int64, ϵ::Float64, h1::Matrix)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product
@@ -86,7 +86,7 @@ function SR_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, ϵ:
     return grad, mean_local_Hamiltonian, acceptance/(params.N*N_MC)
 end
 
-function SR_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64, ϵ::Float64, h1::Matrix)
+function SR_MPS_gradient(params::Parameters, A::Array{ComplexF64}, N_MC::Int64, ϵ::Float64, h1::Matrix)
 
     # Initialize products:
     L∇L::Array{ComplexF64,3} = zeros(ComplexF64,params.χ,params.χ,2) #coupled product
@@ -177,7 +177,7 @@ end
 export Exact_SR_MPS_gradient
 
 
-function Exact_SR_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Matrix, ϵ::Float64)
+function Exact_SR_MPS_gradient(params::Parameters, A::Array{Float64}, basis, h1::Matrix, ϵ::Float64)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product
@@ -258,7 +258,7 @@ end
 
 export old_Exact_SR_MPS_gradient
 
-function old_Exact_SR_MPS_gradient(params::parameters, A::Array{Float64}, basis, h1::Matrix, ϵ::Float64)
+function old_Exact_SR_MPS_gradient(params::Parameters, A::Array{Float64}, basis, h1::Matrix, ϵ::Float64)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product

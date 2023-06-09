@@ -1,7 +1,7 @@
 export MPS, L_MPS_strings, R_MPS_strings, ∂MPS, normalize_MPS
 
 #Contracts MPS over all indices:
-function MPS(params::parameters, sample::Vector{Bool}, A::Array{Float64})
+function MPS(params::Parameters, sample::Vector{Bool}, A::Array{Float64})
     MPS=Matrix{Float64}(I, params.χ, params.χ)
     for i::UInt16 in 1:params.N
         MPS*=A[:,:,2-sample[i]]
@@ -10,7 +10,7 @@ function MPS(params::parameters, sample::Vector{Bool}, A::Array{Float64})
 end
 
 #Left strings of MPSs:
-function L_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Float64})
+function L_MPS_strings(params::Parameters, sample::Vector{Bool}, A::Array{Float64})
     MPS=Matrix{Float64}(I, params.χ, params.χ)
     L = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     L[1] = copy(MPS)
@@ -23,7 +23,7 @@ function L_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Float6
 end
 
 #Right strings of MPSs:
-function R_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Float64})
+function R_MPS_strings(params::Parameters, sample::Vector{Bool}, A::Array{Float64})
     MPS=Matrix{Float64}(I, params.χ, params.χ)
     R = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     R[1] = copy(MPS)
@@ -36,7 +36,7 @@ function R_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Float6
 end
 
 #Claculates the matrix of all derivatives of all elements of the tensor : 
-function ∂MPS(params::parameters, sample::Vector{Bool}, L_set::Vector{Matrix{Float64}}, R_set::Vector{Matrix{Float64}})
+function ∂MPS(params::Parameters, sample::Vector{Bool}, L_set::Vector{Matrix{Float64}}, R_set::Vector{Matrix{Float64}})
     ∂::Array{Float64,3}=zeros(Float64, params.χ, params.χ, 2)
     for m::UInt16 in 1:params.N
         B = R_set[params.N+1-m]*L_set[m]
@@ -50,7 +50,7 @@ function ∂MPS(params::parameters, sample::Vector{Bool}, L_set::Vector{Matrix{F
     return ∂
 end
 
-function normalize_MPS(params::parameters, A::Array{Float64})
+function normalize_MPS(params::Parameters, A::Array{Float64})
     B=rand(Float64,params.χ,params.χ,params.χ,params.χ)
     @tensor B[a,b,u,v] = A[a,b,e]*A[u,v,e]#conj(A[a,b,e,f])*A[u,v,e,f]
     C=deepcopy(B)
@@ -62,7 +62,7 @@ function normalize_MPS(params::parameters, A::Array{Float64})
     return A./norm^(1/(2*params.N))
 end
 
-function norm_MPS(params::parameters, A::Array{Float64})
+function norm_MPS(params::Parameters, A::Array{Float64})
     B=rand(Float64,params.χ,params.χ,params.χ,params.χ)
     @tensor B[a,b,u,v] = A[a,b,e]*A[u,v,e]#conj(A[a,b,e,f])*A[u,v,e,f]
     C=deepcopy(B)
@@ -74,7 +74,7 @@ function norm_MPS(params::parameters, A::Array{Float64})
 end
 
 export op_exp_val_MPS
-function op_exp_val_MPS(op, j, params::parameters, A::Array{Float64})
+function op_exp_val_MPS(op, j, params::Parameters, A::Array{Float64})
     B=zeros(Float64,params.χ,params.χ,params.χ,params.χ)
     @tensor B[a,b,u,v] = A[a,b,e]*op[e,f]*conj(A[u,v,f])#conj(A[a,b,e,f])*A[u,v,e,f]
     C=deepcopy(B)
@@ -87,7 +87,7 @@ function op_exp_val_MPS(op, j, params::parameters, A::Array{Float64})
 end
 
 export make_wavefunction_MPS
-function make_wavefunction_MPS(params::parameters, A::Array{Float64}, basis)
+function make_wavefunction_MPS(params::Parameters, A::Array{Float64}, basis)
     Ψ=zeros(length(basis))
     for (i, state) in enumerate(basis)
         Ψ[i] = MPS(params,state,A)
@@ -103,7 +103,7 @@ end
 ComplexF64 version:
 """
 
-function MPS(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
+function MPS(params::Parameters, sample::Vector{Bool}, A::Array{ComplexF64})
     MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
     for i::UInt16 in 1:params.N
         MPS*=A[:,:,2-sample[i]]
@@ -112,7 +112,7 @@ function MPS(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
 end
 """
 #Left strings of MPSs:
-function L_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
+function L_MPS_strings(params::Parameters, sample::Vector{Bool}, A::Array{ComplexF64})
     MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
     L = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     L[1] = copy(MPS)
@@ -125,7 +125,7 @@ end
 """
 
 #Right strings of MPSs:
-function R_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{ComplexF64})
+function R_MPS_strings(params::Parameters, sample::Vector{Bool}, A::Array{ComplexF64})
     MPS=Matrix{ComplexF64}(I, params.χ, params.χ)
     R = [ Matrix{ComplexF64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     R[1] = copy(MPS)
@@ -138,7 +138,7 @@ function R_MPS_strings(params::parameters, sample::Vector{Bool}, A::Array{Comple
 end
 
 #Claculates the matrix of all derivatives of all elements of the tensor : 
-function ∂MPS(params::parameters, sample::Vector{Bool}, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
+function ∂MPS(params::Parameters, sample::Vector{Bool}, L_set::Vector{Matrix{ComplexF64}}, R_set::Vector{Matrix{ComplexF64}})
     ∂::Array{ComplexF64,3}=zeros(ComplexF64, params.χ, params.χ, 2)
     for m::UInt16 in 1:params.N
         B = R_set[params.N+1-m]*L_set[m]
@@ -152,7 +152,7 @@ function ∂MPS(params::parameters, sample::Vector{Bool}, L_set::Vector{Matrix{C
     return ∂
 end
 
-function normalize_MPS(params::parameters, A::Array{ComplexF64})
+function normalize_MPS(params::Parameters, A::Array{ComplexF64})
     B=rand(ComplexF64,params.χ,params.χ,params.χ,params.χ)
     @tensor B[a,b,u,v] = A[a,b,e]*conj(A[u,v,e])#conj(A[a,b,e,f])*A[u,v,e,f]
     C=deepcopy(B)

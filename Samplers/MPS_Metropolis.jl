@@ -1,6 +1,6 @@
 export Mono_Metropolis_sweep_left, Metropolis_burn_in
 
-function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
+function Mono_Metropolis_sweep_left(params::Parameters, sample::Vector{Bool}, A::Array{Float64}, L_set::Vector{Matrix{Float64}})
     acc::UInt16=0
     R_set = [ Matrix{Float64}(undef,params.χ,params.χ) for _ in 1:params.N+1 ]
     R = Matrix{Float64}(I, params.χ, params.χ)
@@ -31,7 +31,7 @@ function Mono_Metropolis_sweep_left(params::parameters, sample::Vector{Bool}, A:
     return sample, R_set::Vector{Matrix{Float64}}, acc
 end
 
-function Metropolis_burn_in(p::parameters, A::Array{Float64,3})
+function Metropolis_burn_in(p::Parameters, A::Array{Float64,3})
     
     # Initialize random sample and calculate L_set for that sample:
     sample = rand(Bool, p.N)

@@ -14,7 +14,7 @@ mutable struct SGDCache{T} <: StochasticCache
     ∇::Array{T,3}
 end
 
-function SGDCache(A::Array{T,3},params::parameters) where {T<:Complex{<:AbstractFloat}} 
+function SGDCache(A::Array{T,3},params::Parameters) where {T<:Complex{<:AbstractFloat}} 
     cache=SGDCache(
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
@@ -24,9 +24,6 @@ function SGDCache(A::Array{T,3},params::parameters) where {T<:Complex{<:Abstract
     )  
     return cache
 end
-
-
-
 
 abstract type SGD{T} <: Stochastic{T} end
 
@@ -48,15 +45,15 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
     eigen_ops::EigenOperations
 
     #Parameters:
-    params::parameters
+    params::Parameters
 
     #Workspace:
-    workspace::workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}#Union{workspace,Nothing}
 
 end
 
 #Constructor:
-function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters, eigen_op::String="Ising")
+function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, Ising(), params, set_workspace(A, params))
@@ -90,15 +87,15 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
     eigen_ops::EigenOperations
 
     #Parameters:
-    params::parameters
+    params::Parameters
 
     #Workspace:
-    workspace::workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}#Union{workspace,Nothing}
 
 end
 
 #Constructor:
-function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::parameters, eigen_op::String="Ising")
+function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
@@ -116,7 +113,7 @@ function Initialize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
 
-function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
+function Ising_interaction_energy(eigen_ops::Ising, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
 
     A = optimizer.A
     params = optimizer.params
@@ -134,7 +131,7 @@ function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer
     #return -1.0im*params.J*l_int
 end
 
-function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
+function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
 
     A = optimizer.A
     params = optimizer.params
@@ -153,59 +150,56 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, 
     return 1.0im*params.J*l_int/eigen_ops.Kac_norm
 end
 
-function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SGDl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
-    params=optimizer.params
+    params = optimizer.params
     micro_sample = optimizer.workspace.micro_sample
-    micro_sample = projector(sample)
+    micro_sample = Projector(sample)
+
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
     end
 
-    local_L /=ρ_sample
-    local_∇L/=ρ_sample
+    local_L  /= ρ_sample
+    local_∇L./= ρ_sample
 
     return local_L, local_∇L
 end
 
-function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SGDl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
     micro_sample = optimizer.workspace.micro_sample
-    micro_sample = projector(sample)
+    micro_sample = Projector(sample)
+
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
     end
     for j::UInt8 in 1:params.N-1
-        lL, l∇L = two_body_Lindblad_term(sample,micro_sample,j,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
     end
     if params.N>2
-        lL, l∇L = boundary_two_body_Lindblad_term(sample,micro_sample,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = boundary_two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, optimizer)
     end
 
-    local_L /=ρ_sample
-    local_∇L/=ρ_sample
+    local_L  /= ρ_sample
+    local_∇L./= ρ_sample
 
     return local_L, local_∇L
 end
 
-function Update!(optimizer::Stochastic{T}, sample::projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
+function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
 
     params=optimizer.params
     A=optimizer.A
-    #l1=optimizer.l1
     data=optimizer.optimizer_cache
     cache = optimizer.workspace
 
@@ -227,7 +221,6 @@ function Update!(optimizer::Stochastic{T}, sample::projector) where {T<:Complex{
 
     #Add in Ising interaction terms:
     l_int = Ising_interaction_energy(optimizer.eigen_ops, sample, optimizer)
-    #println(l_int); error()
     local_L  +=l_int
     local_∇L.+=l_int*cache.Δ
 
@@ -320,7 +313,7 @@ end
 
 
 
-function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)
+function reweighted_SGD_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::Parameters)
     # Define ensemble averages:
     L∇L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
     ΔLL::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
@@ -391,7 +384,7 @@ end
 
 ### DISTRIBUTED VERSION:
 
-function one_worker_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)
+function one_worker_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::Parameters)
     
     # Define ensemble averages:
     L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
@@ -453,7 +446,7 @@ function one_worker_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::M
     return [L∂L, ΔLL, mean_local_Lindbladian, acceptance]
 end
 
-function distributed_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::parameters)
+function distributed_SGD_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, params::Parameters)
     #output = [L∇L, ΔLL, mean_local_Lindbladian]
 
     #perform reduction:

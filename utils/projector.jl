@@ -1,11 +1,11 @@
-export projector
+export Projector
 
 
-mutable struct projector
+mutable struct Projector
     ket::Vector{Bool}
     bra::Vector{Bool}
 end
 
-projector(p::projector) = projector(copy(p.ket), copy(p.bra))
+Projector(p::Projector) = Projector(copy(p.ket), copy(p.bra))
 
-idx(sample::projector,i::UInt8) = 1+2*sample.ket[i]+sample.bra[i]
+idx(sample::Projector,i::UInt8) = 1+2*sample.ket[i]+sample.bra[i]

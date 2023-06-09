@@ -1,6 +1,6 @@
 
 
-function one_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64}, boundary_conditions)
+function one_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, boundary_conditions)
     # vector of operators: [op1, id, ...]
     ops = fill(id, params.N)
     ops[1] = op1
@@ -14,7 +14,7 @@ function one_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64}, 
     return H#params.h*H
 end
 
-function one_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
+function one_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
     # vector of operators: [op1, id, ...]
     ops = fill(sp_id, params.N)
     ops[1] = op1
@@ -28,7 +28,7 @@ function one_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{Comp
     return H#params.h*H
 end
 
-function two_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
+function two_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
     # vector of operators: [op1, op2, id, ...]
     ops = fill(id, params.N)
     ops[1] = op1
@@ -46,7 +46,7 @@ function two_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64}, 
     return H#params.J*H
 end
 
-function two_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
+function two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
     # vector of operators: [op1, op2, id, ...]
     ops = fill(sp_id, params.N)
     ops[1] = op1
@@ -64,17 +64,17 @@ function two_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{Comp
     return H#params.J*H
 end
 
-function vectorize_Hamiltonian(params::parameters, H::Matrix{ComplexF64})
+function vectorize_Hamiltonian(params::Parameters, H::Matrix{ComplexF64})
     Id::Matrix{ComplexF64} = foldl(⊗, fill(id, params.N))
     return -1im*(H⊗Id - Id⊗transpose(H))
 end
 
-function vectorize_Hamiltonian(params::parameters, H::SparseMatrixCSC{ComplexF64, Int64})
+function vectorize_Hamiltonian(params::Parameters, H::SparseMatrixCSC{ComplexF64, Int64})
     Id::SparseMatrixCSC{ComplexF64, Int64} = foldl(⊗, fill(id, params.N))
     return -1im*(H⊗Id - Id⊗transpose(H))
 end
 
-function one_body_Lindbladian_term(params::parameters, op1::Matrix{ComplexF64}, boundary_conditions)
+function one_body_Lindbladian_term(params::Parameters, op1::Matrix{ComplexF64}, boundary_conditions)
     # vector of operators: [op1, id, ...]
     ops = fill(id, params.N)
     ops[1] = op1
@@ -90,7 +90,7 @@ function one_body_Lindbladian_term(params::parameters, op1::Matrix{ComplexF64}, 
     return params.γ*L_D
 end
 
-function one_body_Lindbladian_term(params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
+function one_body_Lindbladian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
     # vector of operators: [op1, id, ...]
     ops = fill(sp_id, params.N)
     ops[1] = op1
@@ -106,7 +106,7 @@ function one_body_Lindbladian_term(params::parameters, op1::SparseMatrixCSC{Comp
     return params.γ*L_D
 end
 
-function LR_two_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
+function LR_two_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
     H::Matrix{ComplexF64} = zeros(ComplexF64, 2^params.N, 2^params.N)
     if boundary_conditions=="periodic" && mod(params.N,2)==1
         N_K = calculate_Kac_norm(convert(Int64,floor(params.N/2)), params.α)
@@ -138,7 +138,7 @@ function LR_two_body_Hamiltonian_term(params::parameters, op1::Matrix{ComplexF64
     return params.J*H
 end
 
-function LR_two_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
+function LR_two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
     H::SparseMatrixCSC{ComplexF64, Int64} = spzeros(ComplexF64, 2^params.N, 2^params.N)
     if boundary_conditions=="periodic" && mod(params.N,2)==1
         N_K = calculate_Kac_norm(convert(Int64,floor(params.N/2)), params.α)
@@ -170,7 +170,7 @@ function LR_two_body_Hamiltonian_term(params::parameters, op1::SparseMatrixCSC{C
     return params.J*H
 end
 
-function LR_Lindbladian_term(params::parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
+function LR_Lindbladian_term(params::Parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
     Id = foldl(⊗, fill(id, params.N))
     L_D = zeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
 
@@ -228,7 +228,7 @@ function LR_Lindbladian_term(params::parameters, op1::Matrix{ComplexF64}, op2::M
     return L_D
 end
 
-function LR_Lindbladian_term(params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
+function LR_Lindbladian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
     Id = foldl(⊗, fill(sp_id, params.N))
     L_D = spzeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
 
@@ -289,7 +289,7 @@ end
 
 
 
-function single_one_body_Lindbladian_term(pos::Int, params::parameters, op1::Matrix{ComplexF64})
+function single_one_body_Lindbladian_term(pos::Int, params::Parameters, op1::Matrix{ComplexF64})
     # vector of operators: [op1, id, ...]
     ops = fill(id, params.N)
     ops[pos] = op1
@@ -302,7 +302,7 @@ function single_one_body_Lindbladian_term(pos::Int, params::parameters, op1::Mat
     return L_D
 end
 
-function single_one_body_Lindbladian_term(pos::Int, params::parameters, op1::SparseMatrixCSC{ComplexF64, Int64})
+function single_one_body_Lindbladian_term(pos::Int, params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64})
     # vector of operators: [op1, id, ...]
     ops = fill(sp_id, params.N)
     ops[pos] = op1

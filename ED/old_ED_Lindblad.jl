@@ -24,7 +24,7 @@ spsz = sparse(sz)
 spsp = sparse(sp)
 spsm = sparse(sm)
 
-function make_one_body_Lindbladian(params::parameters, H, Γ)
+function make_one_body_Lindbladian(params::Parameters, H, Γ)
     L_H::Matrix{ComplexF64} = -1im*params.h*(H⊗id - id⊗transpose(H))
     L_D::Matrix{ComplexF64} = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
     return (L_H + params.γ*L_D)::Matrix{ComplexF64}

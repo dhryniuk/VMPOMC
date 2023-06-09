@@ -1,7 +1,7 @@
-export parameters
+export Parameters
 
 
-mutable struct parameters
+mutable struct Parameters
     N::Int64
     dim::Int64
     χ::Int64
@@ -15,7 +15,7 @@ mutable struct parameters
     burn_in::Int
 end
 
-Base.display(params::parameters) = begin
+Base.display(params::Parameters) = begin
     println("N\t", params.N)
     println("dim\t", params.dim)
     println("χ\t", params.χ)

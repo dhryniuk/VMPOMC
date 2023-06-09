@@ -1,5 +1,5 @@
-include("MPOMC.jl")
-using .MPOMC
+include("VMPOMC.jl")
+using .VMPOMC
 using NPZ
 using Plots
 using LinearAlgebra
@@ -19,12 +19,12 @@ const hx= 0.5 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
 const α=1
-const N=4
+const N=24
 const dim = 2^N
-χ=6 #bond dimension
+χ=4 #bond dimension
 const burn_in = 0
 
-params = parameters(N,dim,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
+params = Parameters(N,dim,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
 
 #Make single-body Lindbladian:
 const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
@@ -39,7 +39,7 @@ function make_two_body_Lindblad_Hamiltonian(A, B)
     L_H = -1im*( (A⊗id)⊗(B⊗id) - (id⊗transpose(A))⊗(id⊗transpose(B)) )
     return L_H
 end
-const l2 = Jx*make_two_body_Lindblad_Hamiltonian(sx,sx) + Jy*make_two_body_Lindblad_Hamiltonian(sy,sy)
+const l2 = conj( Jx*make_two_body_Lindblad_Hamiltonian(sx,sx) + Jy*make_two_body_Lindblad_Hamiltonian(sy,sy) )
 
 
 
@@ -56,15 +56,15 @@ F::Float64=0.99
 
 Random.seed!(1)
 
-sampler = MetropolisSampler(20*χ^2, 0)
+sampler = MetropolisSampler(10*χ^2, 0)
 #optimizer_cache = Exact(A,params)
 
 #optimizer = Exact(sampler, l1, params, "Ising")
-optimizer = Exact(sampler, l1, l2, params, "Ising")
+#optimizer = Exact(sampler, l1, l2, params, "Ising")
 #optimizer = SGD(sampler, l1, params, "LRIsing")
-#optimizer = SGD(sampler, l1, l2, params, "LRIsing")
+#optimizer = SGD(sampler, l1, l2, params, "Ising")
 #optimizer = SR(sampler, l1, ϵ, params, "LRIsing")
-#optimizer = SR(sampler, l1, l2, ϵ, params, "LRIsing")
+optimizer = SR(sampler, l1, l2, ϵ, params, "Ising")
 
 #display(optimizer.sampler)
 
@@ -76,15 +76,15 @@ optimizer = Exact(sampler, l1, l2, params, "Ising")
 
 #@code_warntype UpdateSR!(optimizer); error()
 #error()
-#@profview begin
-@time begin
+@profview begin
+#@time begin
     for k in 1:100
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
 
-            Optimize!(optimizer,basis,δ*F^(k))
-            #Optimize!(optimizer,δ*F^(k))
+            #Optimize!(optimizer,basis,δ*F^(k))
+            Optimize!(optimizer,δ*F^(k))
 
             #display(optimizer.A); error()
 

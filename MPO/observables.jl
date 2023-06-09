@@ -4,7 +4,7 @@ export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magneti
 export hermetize_MPO, increase_bond_dimension, L_MPO_strings!, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 
-function hermetize_MPO(params::parameters, A::Array{ComplexF64})
+function hermetize_MPO(params::Parameters, A::Array{ComplexF64})
     A=reshape(A,params.χ,params.χ,2,2)
     new_A = deepcopy(A)
     new_A[:,:,1,2]=0.5*(A[:,:,1,2]+A[:,:,2,1])
@@ -14,7 +14,7 @@ function hermetize_MPO(params::parameters, A::Array{ComplexF64})
     return reshape(new_A,params.χ,params.χ,4)#::ComplexF64
 end
 
-function calculate_x_magnetization(params::parameters, A::Array{ComplexF64})
+function calculate_x_magnetization(params::Parameters, A::Array{ComplexF64})
     mp=Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1
         mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
@@ -23,7 +23,7 @@ function calculate_x_magnetization(params::parameters, A::Array{ComplexF64})
     return tr(mp)
 end
 
-function calculate_y_magnetization(params::parameters, A::Array{ComplexF64})
+function calculate_y_magnetization(params::Parameters, A::Array{ComplexF64})
     mp=Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1
         mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
@@ -32,7 +32,7 @@ function calculate_y_magnetization(params::parameters, A::Array{ComplexF64})
     return -tr(mp)
 end
 
-function calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
+function calculate_z_magnetization(params::Parameters, A::Array{ComplexF64})
     mp=Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1
         mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
@@ -41,7 +41,7 @@ function calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
     return tr(mp)
 end
 
-function tensor_calculate_z_magnetization(params::parameters, A::Array{ComplexF64})
+function tensor_calculate_z_magnetization(params::Parameters, A::Array{ComplexF64})
     A=reshape(A,params.χ,params.χ,2,2)
     B=zeros(ComplexF64,params.χ,params.χ)
     D=zeros(ComplexF64,params.χ,params.χ)
@@ -56,7 +56,7 @@ end
 
 export tensor_calculate_magnetization
 
-function tensor_calculate_magnetization(params::parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+function tensor_calculate_magnetization(params::Parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
     #A=reshape(A,params.χ,params.χ,2,2)
     B=zeros(ComplexF64,params.χ,params.χ)
     D=zeros(ComplexF64,params.χ,params.χ)
@@ -69,7 +69,7 @@ function tensor_calculate_magnetization(params::parameters, A::Array{ComplexF64,
     return @tensor C[a,a]
 end
 
-function increase_bond_dimension(params::parameters, A::Array{ComplexF64}, step::Int)
+function increase_bond_dimension(params::Parameters, A::Array{ComplexF64}, step::Int)
     params.χ+=step
     new_A = 0.001*rand(ComplexF64,params.χ,params.χ,4)#2,2)
     for i in 1:4
@@ -83,7 +83,7 @@ function increase_bond_dimension(params::parameters, A::Array{ComplexF64}, step:
     return new_A
 end
 
-function calculate_spin_spin_correlation(params::parameters, A::Array{ComplexF64}, op, dist::Int)
+function calculate_spin_spin_correlation(params::Parameters, A::Array{ComplexF64}, op, dist::Int)
     A=reshape(A,params.χ,params.χ,2,2)
     B=zeros(ComplexF64,params.χ,params.χ)
     D=zeros(ComplexF64,params.χ,params.χ)
@@ -104,7 +104,7 @@ function calculate_spin_spin_correlation(params::parameters, A::Array{ComplexF64
     return @tensor C[a,a]
 end
 
-function calculate_purity(params::parameters, A::Array{ComplexF64})
+function calculate_purity(params::Parameters, A::Array{ComplexF64})
     p = Matrix{Int}(I, params.χ, params.χ)
     for _ in 1:params.N
         p *= ( ct(A[:,:,dINDEX[(1,1)]])*A[:,:,dINDEX[(1,1)]] 
@@ -115,11 +115,11 @@ function calculate_purity(params::parameters, A::Array{ComplexF64})
     return tr(p)
 end
 
-function calculate_Renyi_entropy(params::parameters, A::Array{ComplexF64})
+function calculate_Renyi_entropy(params::Parameters, A::Array{ComplexF64})
     return -log2(calculate_purity(params, A))
 end
 
-function tensor_purity(params::parameters, A::Array{ComplexF64})
+function tensor_purity(params::Parameters, A::Array{ComplexF64})
     A=reshape(A,params.χ,params.χ,2,2)
     B=rand(ComplexF64,params.χ,params.χ,params.χ,params.χ)
     @tensor B[a,b,u,v] = A[a,b,f,e]*A[u,v,e,f]#conj(A[a,b,e,f])*A[u,v,e,f]

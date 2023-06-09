@@ -37,7 +37,7 @@ TPSC = [(1,1),(1,0),(0,1),(0,0)]
 
 
 
-function flatten_index(i,j,s,p::parameters)
+function flatten_index(i,j,s,p::Parameters)
     return i+p.χ*(j-1)+p.χ^2*(s-1)
 end
 
@@ -79,7 +79,7 @@ function make_density_matrix(params, A, basis)
         b=0
         for bra in basis
             b+=1
-            sample = projector(ket,bra)
+            sample = Projector(ket,bra)
             #ρ_sample = MPO(sample,A)
             ρ[k,b] = MPO(params, sample, A)
         end

@@ -1,7 +1,5 @@
 export SR, Optimize!
 
-#temporary:
-export UpdateSR!
 
 
 mutable struct SRCache{T} <: StochasticCache
@@ -21,7 +19,7 @@ mutable struct SRCache{T} <: StochasticCache
     avg_G::Array{T}
 end
 
-function SRCache(A::Array{T,3},params::parameters) where {T<:Complex{<:AbstractFloat}} 
+function SRCache(A::Array{T,3},params::Parameters) where {T<:Complex{<:AbstractFloat}} 
     cache=SRCache(
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
@@ -33,7 +31,6 @@ function SRCache(A::Array{T,3},params::parameters) where {T<:Complex{<:AbstractF
     )  
     return cache
 end
-
 
 abstract type SR{T} <:  Stochastic{T} end
 
@@ -55,16 +52,16 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
     eigen_ops::EigenOperations
 
     #Parameters:
-    params::parameters
+    params::Parameters
     ϵ::Float64
 
     #Workspace:
-    workspace::workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}#Union{workspace,Nothing}
 
 end
 
 #Constructor:
-function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::parameters, eigen_op::String="Ising")
+function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::Parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), params, ϵ, set_workspace(A, params))
@@ -98,16 +95,16 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
     eigen_ops::EigenOperations
 
     #Parameters:
-    params::parameters
+    params::Parameters
     ϵ::Float64
 
     #Workspace:
-    workspace::workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}#Union{workspace,Nothing}
 
 end
 
 #Constructor:
-function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::parameters, eigen_op::String="Ising")
+function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::Parameters, eigen_op::String="Ising")
     A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), params, ϵ, set_workspace(A, params))
@@ -125,7 +122,7 @@ function Initialize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
 
-function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+function Ising_interaction_energy(eigen_ops::Ising, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
 
     A = optimizer.A
     params = optimizer.params
@@ -143,7 +140,7 @@ function Ising_interaction_energy(eigen_ops::Ising, sample::projector, optimizer
     #return -1.0im*params.J*l_int
 end
 
-function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
 
     A = optimizer.A
     params = optimizer.params
@@ -164,50 +161,48 @@ end
 
 #### REPLACE WITH HOLY TRAITS ---
 
-function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SRl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
-    params=optimizer.params
+    params = optimizer.params
     micro_sample = optimizer.workspace.micro_sample
-    micro_sample = projector(sample)
+    micro_sample = Projector(sample)
+
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
     end
 
-    local_L /=ρ_sample
-    local_∇L/=ρ_sample
+    local_L  /= ρ_sample
+    local_∇L./= ρ_sample
 
     return local_L, local_∇L
 end
 
-function SweepLindblad!(sample::projector, ρ_sample::T, optimizer::SRl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
     micro_sample = optimizer.workspace.micro_sample
-    micro_sample = projector(sample)
+    micro_sample = Projector(sample)
+
+    local_L::T = 0
+    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        lL, l∇L = one_body_Lindblad_term(sample,micro_sample,j,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
     end
     for j::UInt8 in 1:params.N-1
-        lL, l∇L = two_body_Lindblad_term(sample,micro_sample,j,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
     end
     if params.N>2
-        lL, l∇L = boundary_two_body_Lindblad_term(sample,micro_sample,optimizer)
-        local_L += lL
-        local_∇L += l∇L
+        local_L, local_∇L = boundary_two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, optimizer)
     end
 
-    local_L /=ρ_sample
-    local_∇L/=ρ_sample
+    local_L  /= ρ_sample
+    local_∇L./= ρ_sample
 
     return local_L, local_∇L
 end
@@ -217,7 +212,7 @@ end
 function UpdateSR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     S::Array{T,2} = optimizer.optimizer_cache.S
     avg_G::Vector{T} = optimizer.optimizer_cache.avg_G
-    params::parameters = optimizer.params
+    params::Parameters = optimizer.params
     workspace = optimizer.workspace
     
     G::Vector{T} = reshape(workspace.Δ,4*params.χ^2)
@@ -228,7 +223,7 @@ function UpdateSR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     #S.+=conj(cache.plus_S)
 end
 
-#function Reconfigure!(data::SRCache{T}, N_MC::UInt64, ϵ::AbstractFloat, params::parameters) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor
+#function Reconfigure!(data::SRCache{T}, N_MC::UInt64, ϵ::AbstractFloat, params::Parameters) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor
 function Reconfigure!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor
 
     data = optimizer.optimizer_cache
@@ -267,8 +262,6 @@ function ComputeGradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
 
     Initialize!(optimizer)
 
-    # Initialize sample and L_set for that sample:
-    #sample = MPO_Metropolis_burn_in(optimizer.A, optimizer.params, optimizer.workspace)
     sample = MPO_Metropolis_burn_in(optimizer)
 
     for _ in 1:optimizer.sampler.N_MC
@@ -336,7 +329,7 @@ end
 
 
 
-
+#### NEED TO CLEAN UP LATER:
 
 
 
@@ -374,11 +367,11 @@ function set_SR(A,params)
     return sr
 end
 
-function MPO_flatten_index(i::UInt8,j::UInt8,s::UInt8,params::parameters)
+function MPO_flatten_index(i::UInt8,j::UInt8,s::UInt8,params::Parameters)
     return i+params.χ*(j-1)+params.χ^2*(s-1)
 end
 
-function sample_update_SR!(data::SR, params::parameters, cache::workspace)
+function sample_update_SR!(data::SR, params::Parameters, cache::Workspace)
     G = reshape(cache.Δ,4*params.χ^2)
     conj_G = conj(G)
     data.avg_G.+= G
@@ -390,7 +383,7 @@ end
 
 """
 
-function ∇!(data::SR, N_MC::UInt64, ϵ::AbstractFloat, params::parameters)
+function ∇!(data::SR, N_MC::UInt64, ϵ::AbstractFloat, params::Parameters)
 
     #Compute metric tensor:
     data.S./=N_MC
@@ -410,7 +403,7 @@ function ∇!(data::SR, N_MC::UInt64, ϵ::AbstractFloat, params::parameters)
     #return grad
 end
 
-function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, sampler::MetropolisSampler, ϵ::AbstractFloat, params::parameters)
+function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, sampler::MetropolisSampler, ϵ::AbstractFloat, params::Parameters)
     N_MC = sampler.N_MC
     
     # Preallocate data cache:
@@ -420,7 +413,7 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
     cache = set_workspace(A,params)
 
     # Initialize sample and L_set for that sample:
-    sample::projector = MPO_Metropolis_burn_in(A, params, cache)
+    sample::Projector = MPO_Metropolis_burn_in(A, params, cache)
 
     for _ in 1:N_MC
 
@@ -445,7 +438,7 @@ function SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Comp
     return data.∇, real(data.mlL), data.acceptance/(N_MC*params.N)
 end
 
-function reweighted_sample_update_SR(p_sample::Float64, S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::parameters, cache::workspace)
+function reweighted_sample_update_SR(p_sample::Float64, S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, params::Parameters, cache::Workspace)
     G = reshape(cache.Δ,4*params.χ^2)
     conj_G = conj(G)
     avg_G.+= p_sample*G
@@ -455,7 +448,7 @@ function reweighted_sample_update_SR(p_sample::Float64, S::Array{<:Complex{<:Abs
 end
 
 function reweighted_apply_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Array{<:Complex{<:AbstractFloat}}, Z::Float64, ϵ::AbstractFloat, 
-    L∇L::Array{<:Complex{<:AbstractFloat},3}, ΔLL::Array{<:Complex{<:AbstractFloat},3}, params::parameters)
+    L∇L::Array{<:Complex{<:AbstractFloat},3}, ΔLL::Array{<:Complex{<:AbstractFloat},3}, params::Parameters)
 
     #Compute metric tensor:
     S./=Z
@@ -475,7 +468,7 @@ function reweighted_apply_SR(S::Array{<:Complex{<:AbstractFloat},2}, avg_G::Arra
     return grad
 end
 
-function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
+function reweighted_SR_MPO_gradient(β::Float64, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::Parameters)
     
     # Define ensemble averages:
     L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
@@ -555,7 +548,7 @@ end
 
 ### DISTRIBUTED VERSION:
 
-function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
+function one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::Parameters)
     
     # Define ensemble averages:
     L∂L::Array{eltype(A),3}=zeros(eltype(A),params.χ,params.χ,4)
@@ -633,7 +626,7 @@ function calculate_Kac_norm(d_max, α; offset=0.0) #periodic BCs only!
     return N_K
 end
 
-function LR_one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
+function LR_one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::Parameters)
     
     if mod(params.N,2)==0
         #error("ONLY ODD NUMBER OF SPINS SUPPORTED ATM")
@@ -711,7 +704,7 @@ function LR_one_worker_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1:
     return [L∂L, ΔLL, mean_local_Lindbladian, S, Left, acceptance]
 end
 
-function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters)
+function distributed_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::Parameters)
     #output = [L∇L, ΔLL, mean_local_Lindbladian, S, Left, Right]
 
     #perform reduction:

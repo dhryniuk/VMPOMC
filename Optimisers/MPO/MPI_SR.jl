@@ -25,7 +25,7 @@ end
 
 export MPI_SR_MPO_optimize!
 
-function MPI_SR_MPO_optimize!(output::SR_cache,δ,A, N_MC, ϵ::AbstractFloat,  params::parameters, nworkers)
+function MPI_SR_MPO_optimize!(output::SR_cache,δ,A, N_MC, ϵ::AbstractFloat,  params::Parameters, nworkers)
 
     L∂L=output.L∂L
     ΔLL=output.ΔLL
@@ -66,7 +66,7 @@ end
 
 export reduced_one_worker_MPI_SR_MPO_gradient
 
-function reduced_one_worker_MPI_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::parameters, comm, par_cache::SR_cache)
+function reduced_one_worker_MPI_SR_MPO_gradient(A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, N_MC::Int64, ϵ::AbstractFloat, params::Parameters, comm, par_cache::SR_cache)
     # Preallocate cache:
     cache = set_workspace(A,params)
 

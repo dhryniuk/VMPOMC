@@ -1,6 +1,6 @@
 export gradient
 
-function gradient(method::String, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, params::parameters; 
+function gradient(method::String, A::Array{<:Complex{<:AbstractFloat}}, l1::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters; 
     parallel::Bool=false, β::Float64=1.0, l2::Matrix{<:Complex{<:AbstractFloat}}=zeros(ComplexF64,1,1), basis=nothing, sampler::MetropolisSampler, ϵ::Float64=0.0)
     #l2::Matrix{<:Complex{<:AbstractFloat}}=nothing, basis=nothing, N_MC::Int64=nothing, ϵ::AbstractFloat=nothing)
 

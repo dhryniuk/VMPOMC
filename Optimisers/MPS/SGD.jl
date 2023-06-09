@@ -1,6 +1,6 @@
 export SGD_MPS_gradient
 
-function SGD_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1::Matrix)
+function SGD_MPS_gradient(params::Parameters, A::Array{Float64}, N_MC::Int64, h1::Matrix)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product
@@ -58,7 +58,7 @@ function SGD_MPS_gradient(params::parameters, A::Array{Float64}, N_MC::Int64, h1
     return (L∇L-ΔLL)/N_MC, mean_local_Hamiltonian, acceptance/(N_MC*params.N)
 end
 
-function SGD_MPS_gradient(params::parameters, A::Array{ComplexF64}, N_MC::Int64, h1::Matrix)
+function SGD_MPS_gradient(params::Parameters, A::Array{ComplexF64}, N_MC::Int64, h1::Matrix)
 
     # Initialize products:
     L∇L::Array{Float64,3} = zeros(Float64,params.χ,params.χ,2) #coupled product
