@@ -1,4 +1,4 @@
-export Exact, Optimize!
+export Exact, Optimize!, ComputeGradient!
 
 
 mutable struct ExactCache{T} <: OptimizerCache
@@ -14,7 +14,7 @@ mutable struct ExactCache{T} <: OptimizerCache
     ∇::Array{T,3}
 end
 
-function ExactCache(A::Array{T,3},params::Parameters) where {T<:Complex{<:AbstractFloat}} 
+function ExactCache(A::Array{T,3}, params::Parameters) where {T<:Complex{<:AbstractFloat}} 
     exact=ExactCache(
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
@@ -51,8 +51,8 @@ mutable struct Exactl1{T<:Complex{<:AbstractFloat}} <: Exact{T}
 end
 
 #Constructor:
-function Exact(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters, eigen_op::String="Ising")
-    A = rand(ComplexF64,params.χ,params.χ,4)
+function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+    #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), params, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
@@ -93,8 +93,8 @@ mutable struct Exactl2{T<:Complex{<:AbstractFloat}} <: Exact{T}
 end
 
 #Constructor:
-function Exact(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters, eigen_op::String="Ising")
-    A = rand(ComplexF64,params.χ,params.χ,4)
+function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+    #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = Exactl2(A, sampler, ExactCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
@@ -180,7 +180,7 @@ function Update!(optimizer::Exact{T}, sample::Projector) where {T<:Complex{<:Abs
     cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
     #Sweep lattice:
-    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)#, local_L, local_∇L)
+    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+= cache.local_∇L_diagonal_coeff.*cache.Δ
@@ -210,7 +210,7 @@ function Finalize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
     data.∇ = (data.L∂L-data.ΔLL)/data.Z
 end
 
-function compute_gradient!(optimizer::Exact{T}, basis::Basis) where {T<:Complex{<:AbstractFloat}}
+function ComputeGradient!(optimizer::Exact{T}, basis::Basis) where {T<:Complex{<:AbstractFloat}}
 
     Initialize!(optimizer)
 
@@ -226,7 +226,7 @@ end
 
 function Optimize!(optimizer::Exact{T}, basis::Basis, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
-    compute_gradient!(optimizer, basis)
+    #ComputeGradient!(optimizer, basis)
 
     ∇ = optimizer.optimizer_cache.∇
     ∇./=maximum(abs.(∇))

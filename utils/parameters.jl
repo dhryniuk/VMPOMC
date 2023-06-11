@@ -11,7 +11,7 @@ mutable struct Parameters
     hx::Float32
     hz::Float32
     γ::Float32
-    α::Int
+    α::Float64
     burn_in::Int
 end
 

@@ -1,4 +1,4 @@
-export SGD, Optimize!
+export SGD, Optimize!, ComputeGradient!
 
 
 mutable struct SGDCache{T} <: StochasticCache
@@ -14,7 +14,7 @@ mutable struct SGDCache{T} <: StochasticCache
     ∇::Array{T,3}
 end
 
-function SGDCache(A::Array{T,3},params::Parameters) where {T<:Complex{<:AbstractFloat}} 
+function SGDCache(A::Array{T,3}, params::Parameters) where {T<:Complex{<:AbstractFloat}} 
     cache=SGDCache(
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
@@ -36,7 +36,7 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
     sampler::MetropolisSampler
 
     #Optimizer:
-    optimizer_cache::SGDCache{T}#Union{ExactCache{T},Nothing}
+    optimizer_cache::SGDCache{T}
 
     #1-local Lindbladian:
     l1::Matrix{T}
@@ -48,13 +48,13 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
     params::Parameters
 
     #Workspace:
-    workspace::Workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}
 
 end
 
 #Constructor:
-function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters, eigen_op::String="Ising")
-    A = rand(ComplexF64,params.χ,params.χ,4)
+function SGD(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+    #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, Ising(), params, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
@@ -75,7 +75,7 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
     sampler::MetropolisSampler
 
     #Optimizer:
-    optimizer_cache::SGDCache{T}#Union{ExactCache{T},Nothing}
+    optimizer_cache::SGDCache{T}
 
     #1-local Lindbladian:
     l1::Matrix{T}
@@ -90,13 +90,13 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
     params::Parameters
 
     #Workspace:
-    workspace::Workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}
 
 end
 
 #Constructor:
-function SGD(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, params::Parameters, eigen_op::String="Ising")
-    A = rand(ComplexF64,params.χ,params.χ,4)
+function SGD(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+    #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
@@ -150,7 +150,7 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, 
     return 1.0im*params.J*l_int/eigen_ops.Kac_norm
 end
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
     micro_sample = optimizer.workspace.micro_sample
@@ -170,7 +170,7 @@ function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}, lo
     return local_L, local_∇L
 end
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
     micro_sample = optimizer.workspace.micro_sample
@@ -214,7 +214,7 @@ function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
     cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
 
     #Sweep lattice:
-    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer, local_L, local_∇L)
+    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
@@ -264,7 +264,7 @@ end
 
 function Optimize!(optimizer::SGD{T}, δ) where {T<:Complex{<:AbstractFloat}}
 
-    ComputeGradient!(optimizer)
+    #ComputeGradient!(optimizer)
 
     ∇ = optimizer.optimizer_cache.∇
     ∇./=maximum(abs.(∇))

@@ -43,7 +43,7 @@ include("Samplers/MPO_Metropolis.jl")
 
 
 #Optimizer routines:
-include("Optimisers/gradient.jl")
+#include("Optimisers/gradient.jl")
 include("Optimisers/eigen_operations.jl")
 include("Optimisers/MPO/common.jl")
 

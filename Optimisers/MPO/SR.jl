@@ -1,5 +1,4 @@
-export SR, Optimize!
-
+export SR, Optimize!, ComputeGradient!, MPI_mean!, MPI_normalize!
 
 
 mutable struct SRCache{T} <: StochasticCache
@@ -61,8 +60,8 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
 end
 
 #Constructor:
-function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::Parameters, eigen_op::String="Ising")
-    A = rand(ComplexF64,params.χ,params.χ,4)
+function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, ϵ::Float64, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+    #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), params, ϵ, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
@@ -83,7 +82,7 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
     sampler::MetropolisSampler
 
     #Optimizer:
-    optimizer_cache::SRCache{T}#Union{ExactCache{T},Nothing}
+    optimizer_cache::SRCache{T}
 
     #1-local Lindbladian:
     l1::Matrix{T}
@@ -99,13 +98,13 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
     ϵ::Float64
 
     #Workspace:
-    workspace::Workspace{T}#Union{workspace,Nothing}
+    workspace::Workspace{T}
 
 end
 
 #Constructor:
-function SR(sampler::MetropolisSampler, l1::Matrix{<:Complex{<:AbstractFloat}}, l2::Matrix{<:Complex{<:AbstractFloat}}, ϵ::Float64, params::Parameters, eigen_op::String="Ising")
-    A = rand(ComplexF64,params.χ,params.χ,4)
+function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, ϵ::Float64, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+    #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
         optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), params, ϵ, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
@@ -127,7 +126,7 @@ function Ising_interaction_energy(eigen_ops::Ising, sample::Projector, optimizer
     A = optimizer.A
     params = optimizer.params
 
-    l_int::eltype(A)=0
+    l_int::T=0
     for j::UInt8 in 1:params.N-1
         l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
         l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
@@ -145,9 +144,9 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, 
     A = optimizer.A
     params = optimizer.params
 
-    l_int_ket::eltype(A) = 0.0
-    l_int_bra::eltype(A) = 0.0
-    l_int::eltype(A) = 0.0
+    l_int_ket::T = 0.0
+    l_int_bra::T = 0.0
+    l_int::T = 0.0
     for i::Int16 in 1:params.N-1
         for j::Int16 in i+1:params.N
             l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
@@ -161,7 +160,7 @@ end
 
 #### REPLACE WITH HOLY TRAITS ---
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
     micro_sample = optimizer.workspace.micro_sample
@@ -181,7 +180,7 @@ function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}, loc
     return local_L, local_∇L
 end
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}, local_L::T, local_∇L::Array{T,3}) where {T<:Complex{<:AbstractFloat}} 
+function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params=optimizer.params
     micro_sample = optimizer.workspace.micro_sample
@@ -276,14 +275,16 @@ function ComputeGradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
         #Update metric tensor:
         UpdateSR!(optimizer)
     end
-    Finalize!(optimizer)
+    #Finalize!(optimizer)
 
     #Reconfigure!(optimizer.optimizer_cache,optimizer.sampler.N_MC,optimizer.ϵ,optimizer.params)
 end
 
 function Optimize!(optimizer::SR{T}, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
-    ComputeGradient!(optimizer)
+    #ComputeGradient!(optimizer)
+
+    Finalize!(optimizer)
 
     Reconfigure!(optimizer)
 
@@ -294,6 +295,29 @@ function Optimize!(optimizer::SR{T}, δ::Float64) where {T<:Complex{<:AbstractFl
     new_A = optimizer.A - δ*∇
     optimizer.A = new_A
     optimizer.A = normalize_MPO!(optimizer.params, optimizer.A)
+end
+
+function MPI_mean!(optimizer::SR{T}, comm) where {T<:Complex{<:AbstractFloat}}
+    par_cache = optimizer.optimizer_cache
+
+    workers_sum!(par_cache.L∂L,comm)
+    workers_sum!(par_cache.ΔLL,comm)
+    workers_sum!(par_cache.mlL,par_cache.mlL,comm)
+    workers_sum!(par_cache.acceptance,par_cache.acceptance,comm)
+    workers_sum!(par_cache.S,comm)
+    workers_sum!(par_cache.avg_G,comm)
+    #ignore ∇???
+end
+
+function MPI_normalize!(optimizer::SR{T}, nworkers) where {T<:Complex{<:AbstractFloat}}
+    par_cache = optimizer.optimizer_cache
+
+    #par_cache.L∂L./=(nworkers)   #why not this too?
+    #par_cache.ΔLL./=(nworkers)   #why not this too?
+    par_cache.mlL/=(nworkers)
+    par_cache.S./=(nworkers)
+    par_cache.avg_G./=(nworkers)
+    #par_cache.acceptance/=(nworkers)
 end
 
 

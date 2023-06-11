@@ -1,4 +1,4 @@
-# This file contains routines detailing the computation of diagonal terms of the Lindbladian
+# This file contains routines required for the computation of purely-diagonal terms of the Lindbladian
 
 abstract type EigenOperations end
 
@@ -9,10 +9,29 @@ struct LongRangeIsing <: EigenOperations
     Kac_norm::Float64
 end
 
+function HarmonicNumber(n::Int,α::Float64)
+    h=0
+    for i in 1:n
+        h+=i^(-α)
+    end
+    return h
+end
+
+function Kac_norm(params::Parameters)
+    N = params.N
+    α = params.α
+
+    if mod(N,2)==0
+        return (2*HarmonicNumber(1+N÷2,α) - 1 - (1+N÷2)^(-α))
+    else
+        return (2*HarmonicNumber(1+(N-1)÷2,α) - 1)
+    end
+end
+
 function LongRangeIsing(params::Parameters)
     α = params.α
-    #Kac_norm = calculate_Kac_norm(α, params)
-    Kac_norm = 1
-    return LongRangeIsing(α,Kac_norm)
+    #K = 1
+    K = Kac_norm(params)
+    return LongRangeIsing(α,K)
 end
 

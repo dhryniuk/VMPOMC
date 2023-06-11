@@ -107,46 +107,6 @@ function reweighted_Mono_Metropolis_sweep_left(β::Float64, sample::Projector, A
     return sample, acc
 end
 
-"""
-function Mono_Metropolis_sweep_right(params::Parameters, sample::density_matrix, A::Array{ComplexF64}, R_set::Vector{Matrix{ComplexF64}})
-
-    function draw_excluded(u)
-        v = rand(1:3)
-        if v>=u
-            v+=1
-        end
-        return v
-    end
-
-    acc = 0
-
-    L_set = Vector{Matrix{ComplexF64}}(undef,0)
-    L = Matrix{ComplexF64}(I, params.χ, params.χ)
-    push!(L_set, copy(L))
-    C = tr(R_set[params.N+1]) #Current MPO  ---> move into loop
-    for i in 1:params.N
-
-        sample_p = density_matrix(1,deepcopy(sample.ket),deepcopy(sample.bra)) #deepcopy necessary?
-        u = dINDEX[(sample.ket[i],sample.bra[i])]
-        v = draw_excluded(u)
-        (sample_p.ket[i], sample_p.bra[i]) = dREVINDEX[v]
-        P = tr(L_set[i]*A[:,:,v]*R_set[params.N+1-i])
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
-        if rand() <= metropolis_prob
-            #sample = sample_p
-            sample.ket = deepcopy(sample_p.ket)
-            sample.bra = deepcopy(sample_p.bra)
-            acc+=1
-        end
-
-        L*= A[:,:,dINDEX[(sample.ket[i],sample.bra[i])]]
-        push!(L_set, copy(L))
-        C = tr(L*R_set[params.N+1-i])
-
-    end
-    return sample, L_set::Vector{Matrix{ComplexF64}}, acc
-end
-"""
 
 
 #function MPO_Metropolis_burn_in(A::Array{<:Complex{<:AbstractFloat},3}, params::Parameters, cache::Workspace)
