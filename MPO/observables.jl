@@ -1,4 +1,4 @@
-export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization, tensor_calculate_z_magnetization, calculate_spin_spin_correlation
+export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization, tensor_calculate_z_magnetization, calculate_spin_spin_correlation, calculate_steady_state_structure_factor
 
 #temporary:
 export hermetize_MPO, increase_bond_dimension, L_MPO_strings!, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
@@ -104,6 +104,19 @@ function calculate_spin_spin_correlation(params::Parameters, A::Array{ComplexF64
     return @tensor C[a,a]
 end
 
+function calculate_steady_state_structure_factor(params::Parameters, A::Array{ComplexF64})
+    sssf = 0
+    for j in 1:params.N
+        for l in 1:params.N
+            if l!=j
+                dist = min(abs(l-j), abs(params.N+l-j))
+                sssf+= calculate_spin_spin_correlation(params, A, sx, dist)
+            end
+        end
+    end
+    return sssf/(params.N*(params.N-1))
+end
+
 function calculate_purity(params::Parameters, A::Array{ComplexF64})
     p = Matrix{Int}(I, params.χ, params.χ)
     for _ in 1:params.N
@@ -148,5 +161,19 @@ function tp_across_3(A::Array{ComplexF64})
     return @tensor B[a,c,u,d]*B[c,b,d,v]*B[b,a,v,u] #N=3
 end
 
+export one_body_reduced_density_matrix
 
+function one_body_reduced_density_matrix(params::Parameters, A::Array{ComplexF64})
+    A=reshape(A,params.χ,params.χ,2,2)
+    ρ_1=zeros(ComplexF64,2,2)
+    #ρ_1 = deepcopy(A)
+    B = deepcopy(A)
+    C = similar(B)
+    for _ in 1:params.N-1
+        @tensor C[a,g,c,d] = B[a,b,c,d]*A[b,g,e,e]
+        B=C
+    end
+    @tensor ρ_1[c,d] = B[a,a,c,d]
+    return ρ_1
+end
 

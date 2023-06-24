@@ -10,13 +10,9 @@ function DQIM(params::Parameters, boundary_conditions)
     """
 
     H_ZZ= params.J*two_body_Hamiltonian_term(params, sz, sz, boundary_conditions)
-    #display(H_ZZ)
-    H_X = one_body_Hamiltonian_term(params, sx, boundary_conditions)
-    #display(H_X)
+    H_X = params.hx*one_body_Hamiltonian_term(params, sx, boundary_conditions)
     L_H = vectorize_Hamiltonian(params, H_ZZ + H_X)
-    #L_H = vectorize_Hamiltonian(params, H_X)
-    #display(L_H)
-    L_D = one_body_Lindbladian_term(params, sm, boundary_conditions)
+    L_D = params.γ*one_body_Lindbladian_term(params, sm, boundary_conditions)
 
     return L_H + L_D
 end
@@ -25,11 +21,39 @@ function sparse_DQIM(params::Parameters, boundary_conditions)
 
     H_ZZ= params.J*two_body_Hamiltonian_term(params, sp_sz, sp_sz, boundary_conditions)
     H_X = params.hx*one_body_Hamiltonian_term(params, sp_sx, boundary_conditions)
-    H_Z = params.hz*one_body_Hamiltonian_term(params, sp_sz, boundary_conditions)
-    L_H = vectorize_Hamiltonian(params, H_ZZ + H_X + H_Z)
-    L_D = one_body_Lindbladian_term(params, sp_sm, boundary_conditions)
+    #H_Z = params.hz*one_body_Hamiltonian_term(params, sp_sz, boundary_conditions)
+    L_H = vectorize_Hamiltonian(params, H_ZZ + H_X)
+    L_D = params.γ*one_body_Lindbladian_term(params, sp_sm, boundary_conditions)
 
     return L_H + L_D
+end
+
+export sparse_DQIM_local_dephasing, sparse_DQIM_collective_dephasing
+
+function sparse_DQIM_local_dephasing(params::Parameters, boundary_conditions)
+
+    H_ZZ= params.J*two_body_Hamiltonian_term(params, sp_sz, sp_sz, boundary_conditions)
+    H_X = params.hx*one_body_Hamiltonian_term(params, sp_sx, boundary_conditions)
+    L_H = vectorize_Hamiltonian(params, H_ZZ + H_X)
+    #display(Matrix(L_H))
+    L_D = params.γ*one_body_Lindbladian_term(params, sp_sm, boundary_conditions)
+    L_D_dephasing = params.γ_d*one_body_Lindbladian_term(params, sp_sz, boundary_conditions)
+    #display(Matrix(L_D_dephasing))
+
+    return L_H + L_D + L_D_dephasing
+end
+
+function sparse_DQIM_collective_dephasing(params::Parameters, boundary_conditions)
+
+    H_ZZ= params.J*two_body_Hamiltonian_term(params, sp_sz, sp_sz, boundary_conditions)
+    H_X = params.hx*one_body_Hamiltonian_term(params, sp_sx, boundary_conditions)
+    L_H = vectorize_Hamiltonian(params, H_ZZ + H_X)
+    L_D = params.γ*one_body_Lindbladian_term(params, sp_sm, boundary_conditions)
+    #display(L_D)
+    L_D_dephasing = params.γ_d*(collective_Lindbladian_term(sp_sz, params)+0.000001*one_body_Lindbladian_term(params, sp_sz, boundary_conditions))
+    #display(L_D_dephasing)
+
+    return L_H + L_D + L_D_dephasing
 end
 
 function DQIM_LRI(params::Parameters, boundary_conditions)
@@ -108,6 +132,20 @@ function make_one_body_Lindbladian(H, Γ)
     L_D = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
     return L_H + L_D
 end
+
+export one_body_Lindblad_term, one_body_Hamiltonian_term
+
+function one_body_Hamiltonian_term(H)
+    L_H = -1im*(H⊗id - id⊗transpose(H))
+    return L_H
+end
+
+function one_body_Lindblad_term(Γ)
+    L_D = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
+    return L_D
+end
+
+
 
 
 

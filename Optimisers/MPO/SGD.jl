@@ -220,7 +220,8 @@ function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
     local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ
 
     #Add in Ising interaction terms:
-    l_int = Ising_interaction_energy(optimizer.eigen_ops, sample, optimizer)
+    l_int = Ising_interaction_energy(optimizer.ising_op, sample, optimizer)
+    l_int += Dephasing_term(optimizer.dephasing_op, sample, optimizer)
     local_L  +=l_int
     local_∇L.+=l_int*cache.Δ
 

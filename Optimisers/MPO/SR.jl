@@ -48,7 +48,8 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
     l1::Matrix{T}
 
     #Eigen operations:
-    eigen_ops::EigenOperations
+    ising_op::IsingInteraction
+    dephasing_op::Dephasing
 
     #Parameters:
     params::Parameters
@@ -60,13 +61,19 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
 end
 
 #Constructor:
-function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, ϵ::Float64, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, ϵ::Float64, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
     #A = rand(ComplexF64,params.χ,params.χ,4)
-    if eigen_op=="Ising"
-        optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), params, ϵ, set_workspace(A, params))
-    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+    if ising_op=="Ising"
+        if dephasing_op=="Local"
+            optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), LocalDephasing(), params, ϵ, set_workspace(A, params))
+        elseif dephasing_op=="Collective"
+            optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), CollectiveDephasing(), params, ϵ, set_workspace(A, params))
+        else
+            error("Unrecognized eigen-operation")
+        end
+    elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>0
-        optimizer = SRl1(A, sampler, SRCache(A, params), l1, LongRangeIsing(params), params, ϵ, set_workspace(A, params))
+        optimizer = SRl1(A, sampler, SRCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, ϵ, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")
     end
@@ -91,7 +98,8 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
     l2::Matrix{T}
 
     #Eigen operations:
-    eigen_ops::EigenOperations
+    ising_op::IsingInteraction
+    dephasing_op::Dephasing
 
     #Parameters:
     params::Parameters
@@ -103,13 +111,19 @@ mutable struct SRl2{T<:Complex{<:AbstractFloat}} <: SR{T}
 end
 
 #Constructor:
-function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, ϵ::Float64, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, ϵ::Float64, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
     #A = rand(ComplexF64,params.χ,params.χ,4)
-    if eigen_op=="Ising"
-        optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), params, ϵ, set_workspace(A, params))
-    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+    if ising_op=="Ising"
+        if dephasing_op=="Local"
+            optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), LocalDephasing(), params, ϵ, set_workspace(A, params))
+        elseif dephasing_op=="Collective"
+            optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), CollectiveDephasing(), params, ϵ, set_workspace(A, params))
+        else
+            error("Unrecognized eigen-operation")
+        end
+    elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>0
-        optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, LongRangeIsing(params), params, ϵ, set_workspace(A, params))
+        optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, LongRangeIsing(params), LocalDephasing(), params, ϵ, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")
     end
@@ -156,6 +170,33 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, 
         end
     end
     return 1.0im*params.J*l_int/eigen_ops.Kac_norm
+end
+
+function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    params = optimizer.params
+
+    l::T=0
+    for j::UInt8 in 1:params.N
+        l_ket = (2*sample.ket[j]-1)
+        l_bra = (2*sample.bra[j]-1)
+        l += (l_ket*l_bra-1)
+    end
+    return params.γ_d*l
+end
+
+function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    params = optimizer.params
+
+    l::T=1
+    for j::UInt8 in 1:params.N
+        l_ket = (2*sample.ket[j]-1)
+        l_bra = (2*sample.bra[j]-1)
+        l *= l_ket*l_bra
+    end
+    l-=1
+    return params.γ_d*l
 end
 
 #### REPLACE WITH HOLY TRAITS ---

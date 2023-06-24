@@ -11,35 +11,48 @@ import Random
 
 #Vincentini parameters: γ=1.0, J=0.5, h to be varied.
 
+
+#Make single-body Lindbladian:
+
+#const l1 = ( make_one_body_Lindbladian(-hx*sx-hz*sz,sqrt(γ)*sm) )
+#display(l1)
 #Define constants:
-const Jx= 0.5 #interaction strength
+const Jx= 0.0 #interaction strength
 const Jy= 0.0 #interaction strength
-const J = 0.5 #interaction strength
+const J = 0.0 #interaction strength
 const hx= 0.5 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
 const α=1
-const N=24
+const N=4
 const dim = 2^N
 χ=4 #bond dimension
 const burn_in = 0
 
-params = Parameters(N,dim,χ,Jx,Jy,J,hx,hz,γ,α, burn_in)
+params = Parameters(N,dim,χ,Jx,Jy,J,hx,hz,γ,0,α, burn_in)
 
-#Make single-body Lindbladian:
 const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
-#const l1 = ( make_one_body_Lindbladian(-hx*sx-hz*sz,sqrt(γ)*sm) )
-#display(l1)
+
+#L = XYZ_Lindbald(params,"periodic")
+L=sparse_DQIM(params, "periodic")
+vals, vecs = eigen_sparse(L)
+ρ=reshape(vecs,2^N,2^N)
+ρ=round.(ρ,digits = 12)
+ρ./=tr(ρ)
+Mx=real( magnetization(sx,ρ,params) )
+println("True x-magnetization is: ", Mx)
+My=real( magnetization(sy,ρ,params) )
+println("True y-magnetization is: ", My)
+Mz=real( magnetization(sz,ρ,params) )
+println("True z-magnetization is: ", Mz)
 
 const basis=generate_bit_basis_reversed(N)
-
-
 
 function make_two_body_Lindblad_Hamiltonian(A, B)
     L_H = -1im*( (A⊗id)⊗(B⊗id) - (id⊗transpose(A))⊗(id⊗transpose(B)) )
     return L_H
 end
-const l2 = conj( Jx*make_two_body_Lindblad_Hamiltonian(sx,sx) + Jy*make_two_body_Lindblad_Hamiltonian(sy,sy) )
+#const l2 = conj( Jx*make_two_body_Lindblad_Hamiltonian(sx,sx) + Jy*make_two_body_Lindblad_Hamiltonian(sy,sy) )
 
 
 
@@ -56,15 +69,17 @@ F::Float64=0.99
 
 Random.seed!(1)
 
+A = rand(ComplexF64,params.χ,params.χ,4)
+
 sampler = MetropolisSampler(10*χ^2, 0)
 #optimizer_cache = Exact(A,params)
 
-#optimizer = Exact(sampler, l1, params, "Ising")
-#optimizer = Exact(sampler, l1, l2, params, "Ising")
-#optimizer = SGD(sampler, l1, params, "LRIsing")
-#optimizer = SGD(sampler, l1, l2, params, "Ising")
-#optimizer = SR(sampler, l1, ϵ, params, "LRIsing")
-optimizer = SR(sampler, l1, l2, ϵ, params, "Ising")
+optimizer = Exact(sampler, A, l1, params, "Ising")
+#optimizer = Exact(sampler, A, l1, l2, params, "Ising")
+#optimizer = SGD(sampler, A, l1, params, "Ising")
+#optimizer = SGD(sampler, A, l1, l2, params, "Ising")
+#optimizer = SR(sampler, A, l1, ϵ, params, "LRIsing")
+#optimizer = SR(sampler, A, l1, l2, ϵ, params, "Ising")
 
 #display(optimizer.sampler)
 
@@ -76,15 +91,17 @@ optimizer = SR(sampler, l1, l2, ϵ, params, "Ising")
 
 #@code_warntype UpdateSR!(optimizer); error()
 #error()
-@profview begin
-#@time begin
+#@profview begin
+@time begin
     for k in 1:100
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
 
-            #Optimize!(optimizer,basis,δ*F^(k))
-            Optimize!(optimizer,δ*F^(k))
+            ComputeGradient!(optimizer,basis)
+            Optimize!(optimizer,basis,δ*F^(k))
+            #ComputeGradient!(optimizer)
+            #Optimize!(optimizer,δ*F^(k))
 
             #display(optimizer.A); error()
 
@@ -154,8 +171,8 @@ display(p)
 #display(p)
 """
 
-L = XYZ_Lindbald(params,"periodic")
-#L=sparse_DQIM(params, "periodic")
+#L = XYZ_Lindbald(params,"periodic")
+L=sparse_DQIM(params, "periodic")
 #vals, vecs = eigen(L)
 vals, vecs = eigen_sparse(L)
 #display(vals)

@@ -139,3 +139,126 @@ function MPO_Metropolis_burn_in(optimizer::Optimizer)
 
     return sample#, cache.L_set
 end
+
+export parity_conserving_metropolis_sweep_left
+
+function parity_conserving_metropolis_sweep_left(sample::Projector, optimizer::Optimizer)
+
+    params = optimizer.params
+
+    C = MPO(params, sample, optimizer.A)
+
+    for i::UInt8 in params.N:-1:1
+        sample_p = Projector(sample)
+        if sample.ket[i]==sample.bra[i]
+            sample_p.ket[i]=!sample_p.ket[i]
+            sample_p.bra[i]=!sample_p.bra[i]
+            println(sample_p)
+            P = MPO(params, sample_p, optimizer.A)
+            metropolis_prob = real((P*conj(P))/(C*conj(C)))
+            if rand() <= metropolis_prob
+                sample = Projector(sample_p)
+                C = P
+            end
+        else 
+            if rand()<=0.5
+                sample_p.ket[mod(i-1-1,params.N)+1] = sample.bra[i]
+                sample_p.bra[i] = sample.ket[mod(i-1-1,params.N)+1]
+            else
+                sample_p.bra[mod(i-1-1,params.N)+1] = sample.ket[i]
+                sample_p.ket[i] = sample.bra[mod(i-1-1,params.N)+1]
+            end
+            println(sample_p)
+            P = MPO(params, sample_p, optimizer.A)
+            metropolis_prob = real((P*conj(P))/(C*conj(C)))
+            if rand() <= metropolis_prob
+                sample = Projector(sample_p)
+                C = P
+            end
+        end
+    end
+    return sample
+end
+
+export parity
+
+function parity(sample::Projector)
+    N = length(sample.ket)
+    P_ket = 1
+    P_bra = 1
+    for i in 1:N
+        if sample.ket[i]==false
+            P_ket*=-1
+        end
+        if sample.bra[i]==false
+            P_bra*=-1
+        end
+    end
+    return P_ket*P_bra
+end
+
+export mag_diff_conserving_metropolis_sweep_left
+
+function mag_diff_conserving_metropolis_sweep_left(sample::Projector, optimizer::Optimizer)
+
+    params = optimizer.params
+
+    C = MPO(params, sample, optimizer.A)
+
+    for i::UInt8 in params.N:-1:1
+        sample_p = Projector(sample)
+
+        #swapping move:
+        if rand() <= 0.5
+            #println("SWAP")
+            if rand()<=0.5
+                sample_p.ket[mod(i-1-1,params.N)+1] = sample.ket[i]
+                sample_p.ket[i] = sample.ket[mod(i-1-1,params.N)+1]
+            else
+                sample_p.bra[mod(i-1-1,params.N)+1] = sample.bra[i]
+                sample_p.bra[i] = sample.bra[mod(i-1-1,params.N)+1]
+            end
+        #flipping move:
+        else
+            #println("FLIP")
+            if sample.ket[i]==sample.bra[mod(i-1-1,params.N)+1]
+                sample_p.ket[i]=!sample_p.ket[i]
+                sample_p.bra[mod(i-1-1,params.N)+1]=!sample_p.bra[mod(i-1-1,params.N)+1]
+            end
+            if sample.bra[i]==sample.ket[mod(i-1-1,params.N)+1]
+                sample_p.bra[i]=!sample_p.bra[i]
+                sample_p.ket[mod(i-1-1,params.N)+1]=!sample_p.ket[mod(i-1-1,params.N)+1]
+            end
+        end
+        #print_canonical(sample_p)
+        P = MPO(params, sample_p, optimizer.A)
+        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        if rand() <= metropolis_prob
+            sample = Projector(sample_p)
+            C = P
+            #println("ACCEPTED")
+        end
+    end
+    return sample
+end
+
+export mag_diff
+
+function mag_diff(sample::Projector)
+    N = length(sample.ket)
+    M_ket = 0
+    M_bra = 0
+    for i in 1:N
+        if sample.ket[i]==false
+            M_ket-=1
+        else
+            M_ket+=1
+        end
+        if sample.bra[i]==false
+            M_bra-=1
+        else
+            M_bra+=1
+        end
+    end
+    return M_ket-M_bra
+end

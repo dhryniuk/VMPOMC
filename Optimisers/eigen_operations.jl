@@ -2,9 +2,11 @@
 
 abstract type EigenOperations end
 
-struct Ising <: EigenOperations end
+abstract type IsingInteraction <: EigenOperations end
 
-struct LongRangeIsing <: EigenOperations
+struct Ising <: IsingInteraction end
+
+struct LongRangeIsing <: IsingInteraction
     α::Float64
     Kac_norm::Float64
 end
@@ -35,3 +37,10 @@ function LongRangeIsing(params::Parameters)
     return LongRangeIsing(α,K)
 end
 
+abstract type Dephasing <: EigenOperations end
+
+#struct NoDephasing <: Dephasing end
+
+struct LocalDephasing <: Dephasing end
+
+struct CollectiveDephasing <: Dephasing end

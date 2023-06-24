@@ -11,6 +11,7 @@ mutable struct Parameters
     hx::Float32
     hz::Float32
     γ::Float32
+    γ_d::Float32
     α::Float64
     burn_in::Int
 end
@@ -25,11 +26,14 @@ Base.display(params::Parameters) = begin
     println("hx\t", params.hx)
     println("hz\t", params.hz)
     println("γ\t", params.γ)
+    println("γ_d\t", params.γ_d)
     println("α\t", params.α)
     println("burn_in\t", params.burn_in)
 end
 
-function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α,burn_in)
+#write a constructor that defaults to 0 whenever some paramter is not specified...
+
+function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α,burn_in)
 	params.N = N;
     params.dim = 2^N;
     params.χ = χ;
@@ -39,6 +43,7 @@ function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,α,burn_in)
     params.hx = hx;
     params.hz = hz;
     params.γ = γ;
+    params.γ_d = γ_d;
     params.α = α;
     params.burn_in = burn_in;
 end

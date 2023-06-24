@@ -226,7 +226,7 @@ end
 
 function Optimize!(optimizer::Exact{T}, basis::Basis, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
-    #ComputeGradient!(optimizer, basis)
+    ComputeGradient!(optimizer, basis)
 
     ∇ = optimizer.optimizer_cache.∇
     ∇./=maximum(abs.(∇))

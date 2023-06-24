@@ -11,7 +11,7 @@ function one_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, 
         ops = circshift(ops,1)
     end
 
-    return H#params.h*H
+    return H
 end
 
 function one_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
@@ -25,7 +25,7 @@ function one_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{Comp
         ops = circshift(ops,1)
     end
 
-    return H#params.h*H
+    return H
 end
 
 function two_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)
@@ -43,7 +43,7 @@ function two_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, 
         H += foldl(⊗, ops)
     end
 
-    return H#params.J*H
+    return H
 end
 
 function two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
@@ -61,7 +61,7 @@ function two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{Comp
         H += foldl(⊗, ops)
     end
 
-    return H#params.J*H
+    return H
 end
 
 function vectorize_Hamiltonian(params::Parameters, H::Matrix{ComplexF64})
@@ -87,7 +87,7 @@ function one_body_Lindbladian_term(params::Parameters, op1::Matrix{ComplexF64}, 
         ops = circshift(ops,1)
         L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
     end
-    return params.γ*L_D
+    return L_D
 end
 
 function one_body_Lindbladian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
@@ -103,7 +103,21 @@ function one_body_Lindbladian_term(params::Parameters, op1::SparseMatrixCSC{Comp
         ops = circshift(ops,1)
         L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
     end
-    return params.γ*L_D
+    return L_D
+end
+
+function collective_Lindbladian_term(op1::SparseMatrixCSC{ComplexF64, Int64}, params::Parameters)
+    # vector of operators: [op1, op1, ...]
+    ops = fill(op1, params.N)
+
+    Id::SparseMatrixCSC{ComplexF64, Int64} = foldl(⊗, fill(sp_id, params.N))
+
+    L_D::SparseMatrixCSC{ComplexF64, Int64} = spzeros(ComplexF64, 2^(2*params.N), 2^(2*params.N))
+
+    Γ = foldl(⊗, ops)
+    L_D += Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗Id/2 - Id⊗(transpose(Γ)*conj(Γ))/2
+
+    return L_D
 end
 
 function LR_two_body_Hamiltonian_term(params::Parameters, op1::Matrix{ComplexF64}, op2::Matrix{ComplexF64}, boundary_conditions)

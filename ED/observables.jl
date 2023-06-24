@@ -1,4 +1,4 @@
-export magnetization, spin_current, spin_spin_correlation
+export magnetization, spin_current, spin_spin_correlation, steady_state_structure_factor
 
 
 function magnetization(op,ρ,params)
@@ -33,16 +33,14 @@ function spin_spin_correlation(op,ρ,params)
     return corr
 end
 
-function spin_current(ρ,params,j,k)
-    ops1 = fill(id, params.N)
-    ops1[j] = sp
-    ops1[k] = sm
-
-    ops2 = fill(id, params.N)
-    ops2[j] = sm
-    ops2[k] = sp
-
-    I = tr(ρ*1im*(foldl(⊗, ops1)-foldl(⊗, ops2)))
-    return I
+function steady_state_structure_factor(ρ,params)
+    sssf = 0
+    for j in 1:params.N
+        for l in 1:params.N
+            if l!=j
+                sssf+= spin_spin_correlation(j,l,sx,ρ,params)
+            end
+        end
+    end
+    return sssf/(params.N*(params.N-1))
 end
-
