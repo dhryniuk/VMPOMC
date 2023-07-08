@@ -15,14 +15,14 @@ mpi_cache = set_mpi()
 const Jx= 0.0 #interaction strength
 const Jy= 0.0 #interaction strength
 const J = 0.5 #interaction strength
-const hx= 0.5 #transverse field strength
+const hx= 1.0 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
 const γ_d = 0.0 #spin decay rate
-const α=1
+const α=0
 const N=10
 const dim = 2^N
-χ=4 #bond dimension
+χ=8 #bond dimension
 const burn_in = 0
 
 params = Parameters(N,2^N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α, 0)
@@ -41,6 +41,23 @@ end
 #const l2 = conj( Jx*make_two_body_Lindblad_Hamiltonian(sx,sx) + Jy*make_two_body_Lindblad_Hamiltonian(sy,sy) )
 
 
+if mpi_cache.rank == 0
+    L = sparse_DQIM(params, "periodic")
+
+    vals, vecs = eigen_sparse(L)
+    ρ=reshape(vecs,2^N,2^N)
+    ρ./=tr(ρ)
+    ρ=round.(ρ,digits = 12)
+
+    Mx=real( magnetization(sx,ρ,params) )
+    println("True x-magnetization is: ", Mx)
+
+    My=real( magnetization(sy,ρ,params) )
+    println("True y-magnetization is: ", My)
+
+    Mz=real( magnetization(sz,ρ,params) )
+    println("True z-magnetization is: ", Mz)
+end
 
 
 if mpi_cache.rank == 0
@@ -48,7 +65,6 @@ if mpi_cache.rank == 0
     A_init=rand(ComplexF64, χ,χ,2,2)
     A=deepcopy(A_init)
     A=reshape(A,χ,χ,4)
-    #MPI.Bcast!(A, root, comm)
 
     #display(A_init)
 
@@ -79,7 +95,6 @@ optimizer = SR(sampler, A, l1, ϵ, params, "Ising")
 #@profview begin
 @time begin
     for k in 1:500
-        #N_MC = 1*χ^2
         for i in 1:10
 
             ComputeGradient!(optimizer)
@@ -106,8 +121,6 @@ optimizer = SR(sampler, A, l1, ϵ, params, "Ising")
             #println("k=$k: ", real(L), " ; ", mz, " ; ", mx)
             println("k=$k: ", real(optimizer.optimizer_cache.mlL)/N, " ; acc_rate=", round(acc*100,sigdigits=2), "%", " \n M_x: ", round(mx,sigdigits=4), " \n M_y: ", round(my,sigdigits=4), " \n M_z: ", round(mz,sigdigits=4))
 
-            #println("sssf = ", calculate_steady_state_structure_factor(params,Af))
-
             push!(list_of_L,L)
             push!(list_of_Mx,mx)
             push!(list_of_My,my)
@@ -115,15 +128,11 @@ optimizer = SR(sampler, A, l1, ϵ, params, "Ising")
         end
     end
 end
-#end
+
 
 if mpi_cache.rank == 0
-    #L = XYZ_Lindbald(params,"periodic")
     L = sparse_DQIM(params, "periodic")
 
-    #display(L); error()
-    #display(imag.(L)); error()
-    #display(real.(L)); error()
     vals, vecs = eigen_sparse(L)
     ρ=reshape(vecs,2^N,2^N)
     ρ./=tr(ρ)
@@ -137,7 +146,4 @@ if mpi_cache.rank == 0
 
     Mz=real( magnetization(sz,ρ,params) )
     println("True z-magnetization is: ", Mz)
-
-    #sssf = steady_state_structure_factor(ρ,params)
-    #println("SSSF = ", sssf)
 end

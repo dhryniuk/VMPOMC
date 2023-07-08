@@ -8,7 +8,7 @@ mutable struct SRCache{T} <: StochasticCache
 
     #Sums:
     mlL::T
-    acceptance::UInt64
+    acceptance::Float64#UInt64
 
     #Gradient:
     ∇::Array{T,3}
@@ -23,7 +23,7 @@ function SRCache(A::Array{T,3},params::Parameters) where {T<:Complex{<:AbstractF
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
         convert(T,0),
-        convert(UInt64,0),
+        0.0,#convert(UInt64,0),
         zeros(T,params.χ,params.χ,4),
         zeros(T,4*params.χ^2,4*params.χ^2),
         zeros(T,4*params.χ^2)
@@ -296,6 +296,8 @@ function Finalize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     data.ΔLL .= conj.(data.ΔLL) #remember to take the complex conjugate
     data.ΔLL .*= data.mlL
     #Reconfigure!(data,N_MC,optimizer.ϵ,optimizer.params)
+
+    #optimizer.optimizer_cache.acceptance/=(optimizer.params.N*N_MC)
 end
 
 function ComputeGradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
@@ -308,7 +310,7 @@ function ComputeGradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
 
         #Generate sample:
         sample, acc = Mono_Metropolis_sweep_left(sample, optimizer)
-        optimizer.optimizer_cache.acceptance += acc
+        optimizer.optimizer_cache.acceptance += acc/(optimizer.params.N*optimizer.sampler.N_MC)
 
         #Compute local estimators:
         Update!(optimizer, sample) 

@@ -19,7 +19,7 @@ import Random
 #Define constants:
 const Jx= 0.0 #interaction strength
 const Jy= 0.0 #interaction strength
-const J = 0.0 #interaction strength
+const J = 0.5 #interaction strength
 const hx= 0.5 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
@@ -93,7 +93,7 @@ optimizer = Exact(sampler, A, l1, params, "Ising")
 #error()
 #@profview begin
 @time begin
-    for k in 1:100
+    for k in 1:300
         L=0;LB=0
         acc::Float64=0
         for i in 1:10
