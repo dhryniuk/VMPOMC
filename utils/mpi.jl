@@ -30,8 +30,10 @@ export set_mpi
 function set_mpi()
     MPI.Init()
     comm=MPI.COMM_WORLD
-    return MPI_cache(comm, MPI.Comm_rank(comm), max(1,MPI.Comm_size(comm) - 1))
+    return MPI_cache(comm, MPI.Comm_rank(comm), max(1,MPI.Comm_size(comm)))
 end
+
+export workers_sum!
 
 function workers_sum!(data, comm) 
     MPI.Allreduce!(data, MPI.SUM, comm)
