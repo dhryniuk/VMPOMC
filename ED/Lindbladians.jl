@@ -28,6 +28,19 @@ function sparse_DQIM(params::Parameters, boundary_conditions)
     return L_H + L_D
 end
 
+export sparse_DQIM_x
+
+function sparse_DQIM_x(params::Parameters, boundary_conditions)
+
+    H_ZZ= params.J*two_body_Hamiltonian_term(params, sp_sz, sp_sz, boundary_conditions)
+    H_X = params.hx*one_body_Hamiltonian_term(params, sp_sx, boundary_conditions)
+    #H_Z = params.hz*one_body_Hamiltonian_term(params, sp_sz, boundary_conditions)
+    L_H = vectorize_Hamiltonian(params, H_ZZ + H_X)
+    L_D = params.γ*one_body_Lindbladian_term(params, sp_smx, boundary_conditions)
+
+    return L_H + L_D
+end
+
 export sparse_DQIM_local_dephasing, sparse_DQIM_collective_dephasing
 
 function sparse_DQIM_local_dephasing(params::Parameters, boundary_conditions)

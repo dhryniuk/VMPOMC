@@ -13,22 +13,23 @@ mutable struct Parameters
     γ::Float32
     γ_d::Float32
     α::Float64
-    burn_in::Int
+    #burn_in::Int
 end
 
 Base.display(params::Parameters) = begin
-    println("N\t", params.N)
-    println("dim\t", params.dim)
-    println("χ\t", params.χ)
-    println("Jx\t", params.Jx)
-    println("Jy\t", params.Jy)
-    println("J\t", params.J)
-    println("hx\t", params.hx)
-    println("hz\t", params.hz)
-    println("γ\t", params.γ)
-    println("γ_d\t", params.γ_d)
-    println("α\t", params.α)
-    println("burn_in\t", params.burn_in)
+    println("\nParameters:")
+    println("N\t\t", params.N)
+    println("dim\t\t", params.dim)
+    println("χ\t\t", params.χ)
+    println("Jx\t\t", params.Jx)
+    println("Jy\t\t", params.Jy)
+    println("Jz\t\t", params.J)
+    println("hx\t\t", params.hx)
+    println("hz\t\t", params.hz)
+    println("γ_l\t\t", params.γ)
+    println("γ_d\t\t", params.γ_d)
+    println("α\t\t", params.α)
+    #println("burn_in\t", params.burn_in)
 end
 
 #write a constructor that defaults to 0 whenever some paramter is not specified...
@@ -45,5 +46,5 @@ function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α,burn_in)
     params.γ = γ;
     params.γ_d = γ_d;
     params.α = α;
-    params.burn_in = burn_in;
+    #params.burn_in = burn_in;
 end

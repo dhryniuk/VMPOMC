@@ -15,6 +15,12 @@ struct MetropolisSampler
     burn::UInt64
 end
 
+Base.display(sampler::MetropolisSampler) = begin
+    println("\nSampler:")
+    println("N_MC\t\t", sampler.N_MC)
+    println("burn\t\t", sampler.burn)
+end
+
 #Sweeps lattice from right to left
 #function Mono_Metropolis_sweep_left(sample::Projector, A::Array{<:Complex{<:AbstractFloat},3}, params::Parameters, cache::Workspace)
 function Mono_Metropolis_sweep_left(sample::Projector, optimizer::Optimizer)

@@ -1,5 +1,5 @@
 export eigen_sparse, set_parameters, calculate_Kac_norm
-export ⊗, id, sx, sy, sz, sp, sm
+export ⊗, id, sx, sy, sz, sp, sm, smx
 
 
 
@@ -17,6 +17,7 @@ sy = [0.0+0.0im 0.0-1im; 0.0+1im 0.0+0.0im]
 sz = [1.0+0.0im 0.0+0.0im; 0.0+0.0im -1.0+0.0im]
 sp = (sx+1im*sy)/2
 sm = (sx-1im*sy)/2
+smx = (sy-1im*sz)/2
 
 sp_id = sparse(id)
 sp_sx = sparse(sx)
@@ -24,6 +25,7 @@ sp_sy = sparse(sy)
 sp_sz = sparse(sz)
 sp_sp = sparse(sp)
 sp_sm = sparse(sm)
+sp_smx = sparse(smx)
 
 """
 mutable struct parameters

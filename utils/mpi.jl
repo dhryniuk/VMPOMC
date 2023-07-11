@@ -25,6 +25,12 @@ struct MPI_cache{A,B,C}
     nworkers::C
 end
 
+Base.display(mpi::MPI_cache) = begin
+    println("\nMPI:")
+    println("n_worlds\t", mpi.nworkers)
+    println("root\t\t", 0)
+end
+
 export set_mpi
 
 function set_mpi()

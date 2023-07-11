@@ -60,6 +60,16 @@ mutable struct SRl1{T<:Complex{<:AbstractFloat}} <: SR{T}
 
 end
 
+Base.display(optimizer::SRl1) = begin
+    println("\nOptimizer:")
+    println("method\t\tSR-l1")
+    println("ϵ\t\t", optimizer.ϵ)
+    println("eigen_op\t", optimizer.ising_op)
+    println("eigen_op\t", optimizer.dephasing_op)
+    println("l1\t\t",optimizer.l1)
+end
+
+
 #Constructor:
 function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, ϵ::Float64, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
     #A = rand(ComplexF64,params.χ,params.χ,4)
