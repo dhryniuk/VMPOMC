@@ -30,9 +30,7 @@ const α=0
 N = parse(Int64,ARGS[1])
 χ = parse(Int64,ARGS[2])
 
-const dim = 2^N
-
-params = Parameters(N,2^N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
+params = Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 
 #Make single-body Lindbladian:
 #const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )

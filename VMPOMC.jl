@@ -55,7 +55,7 @@ include("Optimisers/MPS/SR.jl")
 include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
-include("Optimisers/MPO/MPI_SR.jl")
+#include("Optimisers/MPO/MPI_SR.jl")
 
 
 

@@ -3,7 +3,8 @@ export Parameters
 
 mutable struct Parameters
     N::Int64
-    dim::Int64
+    dim_H::Int64
+    dim_L::Int64
     χ::Int64
     Jx::Float32
     Jy::Float32
@@ -13,13 +14,13 @@ mutable struct Parameters
     γ::Float32
     γ_d::Float32
     α::Float64
-    #burn_in::Int
 end
 
 Base.display(params::Parameters) = begin
     println("\nParameters:")
     println("N\t\t", params.N)
-    println("dim\t\t", params.dim)
+    println("dim_H\t\t", params.dim_H)
+    println("dim_L\t\t", params.dim_L)
     println("χ\t\t", params.χ)
     println("Jx\t\t", params.Jx)
     println("Jy\t\t", params.Jy)
@@ -29,14 +30,19 @@ Base.display(params::Parameters) = begin
     println("γ_l\t\t", params.γ)
     println("γ_d\t\t", params.γ_d)
     println("α\t\t", params.α)
-    #println("burn_in\t", params.burn_in)
 end
 
-#write a constructor that defaults to 0 whenever some paramter is not specified...
+#write a constructor that defaults to 0 whenever some parameter is not specified...
 
-function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α,burn_in)
+function Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
+    return Parameters(N,2^N,2^(2*N),χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
+end
+
+"""
+function Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 	params.N = N;
-    params.dim = 2^N;
+    params.dim_H = 2^N;
+    params.dim_L = 2^(2*N);
     params.χ = χ;
     params.Jx = Jx;
     params.Jy = Jy;
@@ -46,5 +52,5 @@ function set_parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α,burn_in)
     params.γ = γ;
     params.γ_d = γ_d;
     params.α = α;
-    #params.burn_in = burn_in;
 end
+"""
