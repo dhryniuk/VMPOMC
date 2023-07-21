@@ -156,18 +156,24 @@ function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) wh
     micro_sample = optimizer.workspace.micro_sample
     micro_sample = Projector(sample)
 
-    local_L::T = 0
-    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    #REPLACE INPLACE
+    temp_local_L = optimizer.cache.temp_local_L
+    temp_local_L = 0
+    temp_local_∇L = optimizer.cache.temp_local_∇L
+    temp_local_∇L = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        temp_local_L, temp_local_∇L = one_body_Lindblad_term!(temp_local_L, temp_local_∇L, sample, micro_sample, j, optimizer)
     end
 
-    local_L  /= ρ_sample
-    local_∇L./= ρ_sample
+    temp_local_L  /= ρ_sample
+    temp_local_∇L./= ρ_sample
 
-    return local_L, local_∇L
+    #optimizer.local_L += temp_local_L
+    #optimizer.local_∇L+= temp_local_∇L
+
+    return temp_local_L, temp_local_∇L
 end
 
 function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}) where {T<:Complex{<:AbstractFloat}} 
@@ -204,9 +210,12 @@ function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
     cache = optimizer.workspace
 
     #Initialize auxiliary arrays:
-    local_L::T = 0
-    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
-    l_int::T = 0
+    local_L = cache.local_L
+    local_∇L = cache.local_∇L
+    l_int = cache.l_int
+    local_L = 0
+    local_∇L = zeros(T,params.χ,params.χ,4)
+    l_int = 0
     cache.local_∇L_diagonal_coeff = 0
 
     ρ_sample::T = tr(cache.R_set[params.N+1])
@@ -215,6 +224,7 @@ function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
 
     #Sweep lattice:
     local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)
+    #SweepLindblad!(sample, ρ_sample, optimizer)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+=cache.local_∇L_diagonal_coeff.*cache.Δ

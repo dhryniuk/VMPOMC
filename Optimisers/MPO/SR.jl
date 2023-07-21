@@ -313,6 +313,7 @@ end
 function ComputeGradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
 
     Initialize!(optimizer)
+    sample = optimizer.workspace.sample
 
     sample = MPO_Metropolis_burn_in(optimizer)
 

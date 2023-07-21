@@ -13,7 +13,7 @@ const J = 0.5 #interaction strength
 const hx= 1.0 #transverse field strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
-const γ_d = 0.0 #spin decay rate
+const γ_d = 0.5 #spin decay rate
 const α=0
 #const N=10
 #χ=8 #bond dimension
@@ -25,10 +25,12 @@ N = parse(Int64,ARGS[1])
 
 const dim = 2^N
 
-params = Parameters(N,2^N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α, 0)
+params = Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 
 @time begin
-L = sparse_DQIM(params, "periodic")
+#L = sparse_DQIM(params, "periodic")
+#L = sparse_DQIM_local_dephasing(params, "periodic")
+L = sparse_DQIM_collective_dephasing(params, "periodic")
 end
 
 @time begin
@@ -47,3 +49,6 @@ println("True y-magnetization is: ", My)
 
 Mz=real( magnetization(sz,ρ,params) )
 println("True z-magnetization is: ", Mz)
+
+Π=real( tr(ρ^2) )
+println("True purity is: ", Π)
