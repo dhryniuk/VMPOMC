@@ -217,18 +217,22 @@ function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) whe
     micro_sample = optimizer.workspace.micro_sample
     micro_sample = Projector(sample)
 
-    local_L::T = 0
-    local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    #temp_local_L::T = 0
+    #temp_local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    temp_local_L = optimizer.workspace.temp_local_L
+    temp_local_L = 0.0+0.0im
+    temp_local_∇L = optimizer.workspace.temp_local_∇L
+    temp_local_∇L = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        temp_local_L, temp_local_∇L = one_body_Lindblad_term!(temp_local_L, temp_local_∇L, sample, micro_sample, j, optimizer)
     end
 
-    local_L  /= ρ_sample
-    local_∇L./= ρ_sample
+    temp_local_L  /= ρ_sample
+    temp_local_∇L./= ρ_sample
 
-    return local_L, local_∇L
+    return temp_local_L, temp_local_∇L
 end
 
 function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}) where {T<:Complex{<:AbstractFloat}} 

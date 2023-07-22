@@ -133,7 +133,7 @@ end
             #L = calculate_mean_local_Lindbladian(MPOMC.params,l1,A,basis)
             #println("k=$k: ", real(L), " ; ", mz, " ; ", mx)
 
-            GC.gc()
+            #GC.gc()
 
             o = open("mem.out", "a")
             println(o, "k=$k: ", Base.Sys.free_memory())
