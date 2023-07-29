@@ -29,8 +29,8 @@ mutable struct Workspace{T<:Complex{<:AbstractFloat}}
     l_int::T
     local_∇L_diagonal_coeff::T
 
-    temp_local_L::T
-    temp_local_∇L::Array{T,3}
+    #temp_local_L::T
+    #temp_local_∇L::Array{T,3}
 
 end
 
@@ -65,10 +65,10 @@ function set_workspace(A::Array{T,3}, params::Parameters) where {T<:Complex{<:Ab
         0.0+0.0im,
         zeros(T,params.χ,params.χ,4),
         0.0+0.0im,
-        0.0+0.0im,
+        0.0+0.0im#,
 
-        0.0+0.0im,
-        zeros(T,params.χ,params.χ,4)
+        #0.0+0.0im,
+        #zeros(T,params.χ,params.χ,4)
         )
     return cache
 end

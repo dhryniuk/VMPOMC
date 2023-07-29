@@ -210,9 +210,9 @@ function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
     cache = optimizer.workspace
 
     #Initialize auxiliary arrays:
-    local_L = cache.local_L
-    local_∇L = cache.local_∇L
-    l_int = cache.l_int
+    #local_L = cache.local_L
+    #local_∇L = cache.local_∇L
+    #l_int = cache.l_int
     local_L = 0
     local_∇L = zeros(T,params.χ,params.χ,4)
     l_int = 0

@@ -182,6 +182,19 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, 
     return 1.0im*params.J*l_int/eigen_ops.Kac_norm
 end
 
+function OLDDephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    params = optimizer.params
+
+    l::T=0
+    for j::UInt8 in 1:params.N
+        l_ket = (2*sample.ket[j]-1)
+        l_bra = (2*sample.bra[j]-1)
+        l += (l_ket*l_bra-1)
+    end
+    return params.γ_d*l
+end
+
 function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
@@ -195,7 +208,8 @@ function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimiz
     return params.γ_d*l
 end
 
-function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+
+function OLDDephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
 
@@ -209,6 +223,20 @@ function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, op
     return params.γ_d*l
 end
 
+function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    params = optimizer.params
+
+    l_ket::T=0
+    l_bra::T=0
+    for j::UInt8 in 1:params.N
+        l_ket += (2*sample.ket[j]-1)
+        l_bra += (2*sample.bra[j]-1)
+        #l += (l_ket*l_bra-1)
+    end
+    return params.γ_d*(l_ket*l_bra-0.5*(l_ket^2+l_bra^2))
+end
+
 #### REPLACE WITH HOLY TRAITS ---
 
 function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) where {T<:Complex{<:AbstractFloat}} 
@@ -217,12 +245,12 @@ function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) whe
     micro_sample = optimizer.workspace.micro_sample
     micro_sample = Projector(sample)
 
-    #temp_local_L::T = 0
-    #temp_local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
-    temp_local_L = optimizer.workspace.temp_local_L
-    temp_local_L = 0.0+0.0im
-    temp_local_∇L = optimizer.workspace.temp_local_∇L
-    temp_local_∇L = zeros(T,params.χ,params.χ,4)
+    temp_local_L::T = 0
+    temp_local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    #temp_local_L = optimizer.workspace.temp_local_L
+    #temp_local_L = 0.0+0.0im
+    #temp_local_∇L = optimizer.workspace.temp_local_∇L
+    #temp_local_∇L = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
