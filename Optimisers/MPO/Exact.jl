@@ -41,6 +41,7 @@ mutable struct Exactl1{T<:Complex{<:AbstractFloat}} <: Exact{T}
 
     #Eigen operations:
     eigen_ops::EigenOperations
+    dephasing_op::Dephasing
 
     #Parameters:
     params::Parameters
@@ -51,13 +52,20 @@ mutable struct Exactl1{T<:Complex{<:AbstractFloat}} <: Exact{T}
 end
 
 #Constructor:
-function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, eigen_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
     #A = rand(ComplexF64,params.χ,params.χ,4)
     if eigen_op=="Ising"
-        optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), params, set_workspace(A, params))
+        #optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), params, set_workspace(A, params))
+        if dephasing_op=="Local"
+            optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), LocalDephasing(), params, set_workspace(A, params))
+        elseif dephasing_op=="Collective"
+            optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), CollectiveDephasing(), params, set_workspace(A, params))
+        else
+            error("Unrecognized eigen-operation")
+        end
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
         @assert params.α>0
-        optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, LongRangeIsing(params), params, set_workspace(A, params))
+        optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")
     end
@@ -214,19 +222,20 @@ function ComputeGradient!(optimizer::Exact{T}, basis::Basis) where {T<:Complex{<
 
     Initialize!(optimizer)
 
-    for k in 1:optimizer.params.dim
-        for l in 1:optimizer.params.dim
+    for k in 1:optimizer.params.dim_H
+        for l in 1:optimizer.params.dim_H
             sample = Projector(basis[k],basis[l])
             Update!(optimizer, sample) 
         end
     end
 
-    Finalize!(optimizer)
+    #Finalize!(optimizer)
 end
 
 function Optimize!(optimizer::Exact{T}, basis::Basis, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
-    ComputeGradient!(optimizer, basis)
+    #ComputeGradient!(optimizer, basis)
+    Finalize!(optimizer)
 
     ∇ = optimizer.optimizer_cache.∇
     ∇./=maximum(abs.(∇))

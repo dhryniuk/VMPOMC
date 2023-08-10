@@ -8,7 +8,7 @@ mutable struct SGDCache{T} <: StochasticCache
 
     #Sums:
     mlL::T
-    acceptance::UInt64
+    acceptance::Float64
 
     #Gradient:
     ∇::Array{T,3}
@@ -19,7 +19,7 @@ function SGDCache(A::Array{T,3}, params::Parameters) where {T<:Complex{<:Abstrac
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
         convert(T,0),
-        convert(UInt64,0),
+        0.0,#convert(UInt64,0),
         zeros(T,params.χ,params.χ,4)
     )  
     return cache
@@ -42,7 +42,8 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
     l1::Matrix{T}
 
     #Eigen operations:
-    eigen_ops::EigenOperations
+    ising_op::IsingInteraction
+    dephasing_op::Dephasing
 
     #Parameters:
     params::Parameters
@@ -52,14 +53,28 @@ mutable struct SGDl1{T<:Complex{<:AbstractFloat}} <: SGD{T}
 
 end
 
+Base.display(optimizer::SGDl1) = begin
+    println("\nOptimizer:")
+    println("method\t\tSGD-l1")
+    println("eigen_op\t", optimizer.ising_op)
+    println("eigen_op\t", optimizer.dephasing_op)
+    println("l1\t\t",optimizer.l1)
+end
+
 #Constructor:
-function SGD(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+function SGD(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
     #A = rand(ComplexF64,params.χ,params.χ,4)
-    if eigen_op=="Ising"
-        optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, Ising(), params, set_workspace(A, params))
-    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+    if ising_op=="Ising"
+        if dephasing_op=="Local"
+            optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, Ising(), LocalDephasing(), params, set_workspace(A, params))
+        elseif dephasing_op=="Collective"
+            optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, Ising(), CollectiveDephasing(), params, set_workspace(A, params))        
+        else
+            error("Unrecognized eigen-operation")
+        end
+    elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>0
-        optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, LongRangeIsing(params), params, set_workspace(A, params))
+        optimizer = SGDl1(A, sampler, SGDCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")
     end
@@ -84,7 +99,7 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
     l2::Matrix{T}
 
     #Eigen operations:
-    eigen_ops::EigenOperations
+    ising_op::IsingInteraction
 
     #Parameters:
     params::Parameters
@@ -150,17 +165,45 @@ function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, 
     return 1.0im*params.J*l_int/eigen_ops.Kac_norm
 end
 
+function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    params = optimizer.params
+
+    l::T=0
+    for j::UInt8 in 1:params.N
+        l_ket = (2*sample.ket[j]-1)
+        l_bra = (2*sample.bra[j]-1)
+        l += (l_ket*l_bra-1)
+    end
+    return params.γ_d*l
+end
+
+function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    params = optimizer.params
+
+    l_ket::T=0
+    l_bra::T=0
+    for j::UInt8 in 1:params.N
+        l_ket += (2*sample.ket[j]-1)
+        l_bra += (2*sample.bra[j]-1)
+        #l += (l_ket*l_bra-1)
+    end
+    return params.γ_d*(l_ket*l_bra-0.5*(l_ket^2+l_bra^2))
+end
+
 function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
     micro_sample = optimizer.workspace.micro_sample
     micro_sample = Projector(sample)
 
-    #REPLACE INPLACE
-    temp_local_L = optimizer.cache.temp_local_L
-    temp_local_L = 0
-    temp_local_∇L = optimizer.cache.temp_local_∇L
-    temp_local_∇L = zeros(T,params.χ,params.χ,4)
+    temp_local_L::T = 0
+    temp_local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    #temp_local_L = optimizer.cache.temp_local_L
+    #temp_local_L = 0
+    #temp_local_∇L = optimizer.cache.temp_local_∇L
+    #temp_local_∇L = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
@@ -258,6 +301,7 @@ end
 function ComputeGradient!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
 
     Initialize!(optimizer)
+    sample = optimizer.workspace.sample
 
     # Initialize sample and L_set for that sample:
     sample = MPO_Metropolis_burn_in(optimizer)
@@ -266,16 +310,19 @@ function ComputeGradient!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
 
         #Generate sample:
         sample, acc = Mono_Metropolis_sweep_left(sample, optimizer)
-        optimizer.optimizer_cache.acceptance += acc
+        optimizer.optimizer_cache.acceptance += acc/(optimizer.params.N*optimizer.sampler.N_MC)
 
+        #Compute local estimators:
         Update!(optimizer, sample) 
     end
-    Finalize!(optimizer)
+    #Finalize!(optimizer)
 end
 
-function Optimize!(optimizer::SGD{T}, δ) where {T<:Complex{<:AbstractFloat}}
+function Optimize!(optimizer::SGD{T}, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
     #ComputeGradient!(optimizer)
+
+    Finalize!(optimizer)
 
     ∇ = optimizer.optimizer_cache.∇
     ∇./=maximum(abs.(∇))
@@ -284,6 +331,63 @@ function Optimize!(optimizer::SGD{T}, δ) where {T<:Complex{<:AbstractFloat}}
     new_A = optimizer.A - δ*∇
     optimizer.A = new_A
     optimizer.A = normalize_MPO!(optimizer.params, optimizer.A)
+end
+
+function MPI_mean!(optimizer::SGD{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
+    par_cache = optimizer.optimizer_cache
+
+    #workers_sum!(par_cache.L∂L,comm)
+    #workers_sum!(par_cache.ΔLL,comm)
+
+    #MPI.Allreduce!(par_cache.L∂L, MPI.SUM, comm)
+    #MPI.Allreduce!(par_cache.ΔLL, MPI.SUM, comm)
+    
+    #workers_sum!(par_cache.mlL,par_cache.mlL,comm)
+    #workers_sum!(par_cache.mlL,comm)
+    #MPI.Allreduce(par_cache.mlL, MPI.SUM, comm)
+    #par_cache.mlL/=(nworkers)
+
+    #workers_sum!(par_cache.acceptance,par_cache.acceptance,comm)
+    #workers_sum!(par_cache.∇,comm)
+    #ignore ∇???
+
+    #sleep(mpi_cache.rank)
+    #println(mpi_cache.rank)#, par_cache.mlL)
+    #display(par_cache.L∂L)
+
+
+
+    MPI.Allreduce!(par_cache.L∂L, +, mpi_cache.comm)
+    MPI.Allreduce!(par_cache.ΔLL, +, mpi_cache.comm)
+    #MPI.Allreduce!(par_cache.mlL, MPI.SUM, mpi_cache.comm)
+
+    mlL = [par_cache.mlL]
+    MPI.Reduce!(mlL, +, mpi_cache.comm, root=0)
+    if mpi_cache.rank == 0
+        par_cache.mlL = mlL[1]/mpi_cache.nworkers
+        par_cache.L∂L./=mpi_cache.nworkers
+        par_cache.ΔLL./=mpi_cache.nworkers
+    end
+
+
+    #sleep(10)
+
+    #if mpi_cache.rank == 0
+    #    println("REDUCED:")
+    #    display(par_cache.L∂L)
+    #end
+
+    #workers_sum!(par_cache.mlL,par_cache.mlL,comm)
+end
+
+function MPI_normalize!(optimizer::SGD{T}, nworkers) where {T<:Complex{<:AbstractFloat}}
+    par_cache = optimizer.optimizer_cache
+
+    #par_cache.L∂L./=(nworkers)   #why not this too?
+    #par_cache.ΔLL./=(nworkers)   #why not this too?
+    #par_cache.mlL/=(nworkers)
+    #par_cache.∇/=(nworkers)
+    #par_cache.acceptance/=(nworkers)
 end
 
 

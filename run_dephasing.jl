@@ -23,14 +23,15 @@ const γ = 1.0 #spin decay rate
 #const γ_d = 0.0 #spin decay rate
 const α=0
 #const N=10
-#χ=8 #bond dimension
+#χ=12 #bond dimension
 #const burn_in = 0
 
 #set values from command line optional parameters:
 N = parse(Int64,ARGS[1])
-χ = parse(Int64,ARGS[2])
-hx= parse(Float64,ARGS[3])
-γ_d = parse(Float64,ARGS[5])
+γ_d = parse(Float64,ARGS[2])
+hx = parse(Float64,ARGS[3])
+χ = parse(Int64,ARGS[4])
+
 
 params = Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 
@@ -67,14 +68,14 @@ end
 MPI.Bcast!(A, 0, mpi_cache.comm)
 
 
-δ::Float64 = 0.01
+δ::Float64 = 0.05
 F::Float64=0.9998
-ϵ::Float64=0.1
+ϵ::Float64=parse(Float64,ARGS[5])#0.01
 
 
-sampler = MetropolisSampler(10*χ^2, 0)
-optimizer = SR(sampler, A, l1, ϵ, params, "Ising", ARGS[4])
-N_iterations = 500
+sampler = MetropolisSampler(5*χ^2, 0)
+optimizer = SR(sampler, A, l1, ϵ, params, "Ising", ARGS[6])
+N_iterations = 20000
 
 #Save parameters to file:
 if mpi_cache.rank == 0
@@ -165,6 +166,10 @@ end
             close(list_of_P)
 
             save("MPO_density_matrix_χ$(χ)_N$(N)_hx$(hx)_γd$(γ_d).jld", "MPO_density_matrix", Af)
+        end
+
+        if mod(k,10)==0
+            GC.gc()
         end
     end
 end

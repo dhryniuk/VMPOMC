@@ -383,15 +383,16 @@ function Optimize!(optimizer::SR{T}, δ::Float64) where {T<:Complex{<:AbstractFl
     optimizer.A = normalize_MPO!(optimizer.params, optimizer.A)
 end
 
-function MPI_mean!(optimizer::SR{T}, comm) where {T<:Complex{<:AbstractFloat}}
+"""
+function MPI_mean!(optimizer::SR{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
     par_cache = optimizer.optimizer_cache
 
-    workers_sum!(par_cache.L∂L,comm)
-    workers_sum!(par_cache.ΔLL,comm)
-    workers_sum!(par_cache.mlL,par_cache.mlL,comm)
-    workers_sum!(par_cache.acceptance,par_cache.acceptance,comm)
-    workers_sum!(par_cache.S,comm)
-    workers_sum!(par_cache.avg_G,comm)
+    workers_sum!(par_cache.L∂L,mpi_cache.comm)
+    workers_sum!(par_cache.ΔLL,mpi_cache.comm)
+    workers_sum!(par_cache.mlL,par_cache.mlL,mpi_cache.comm)
+    workers_sum!(par_cache.acceptance,par_cache.acceptance,mpi_cache.comm)
+    workers_sum!(par_cache.S,mpi_cache.comm)
+    workers_sum!(par_cache.avg_G,mpi_cache.comm)
     #ignore ∇???
 end
 
@@ -406,6 +407,26 @@ function MPI_normalize!(optimizer::SR{T}, nworkers) where {T<:Complex{<:Abstract
     #par_cache.acceptance/=(nworkers)
 end
 
+"""
+function MPI_mean!(optimizer::SR{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
+    par_cache = optimizer.optimizer_cache
+
+    MPI.Allreduce!(par_cache.L∂L, +, mpi_cache.comm)
+    MPI.Allreduce!(par_cache.ΔLL, +, mpi_cache.comm)
+    MPI.Allreduce!(par_cache.S, +, mpi_cache.comm)
+    MPI.Allreduce!(par_cache.avg_G, +, mpi_cache.comm)
+
+    mlL = [par_cache.mlL]
+    MPI.Reduce!(mlL, +, mpi_cache.comm, root=0)
+    if mpi_cache.rank == 0
+        par_cache.mlL = mlL[1]/mpi_cache.nworkers
+        par_cache.L∂L./=mpi_cache.nworkers
+        par_cache.ΔLL./=mpi_cache.nworkers
+        par_cache.S./=mpi_cache.nworkers
+        par_cache.avg_G./=mpi_cache.nworkers
+    end
+
+end
 
 
 
