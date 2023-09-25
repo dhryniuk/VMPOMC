@@ -69,6 +69,23 @@ function tensor_calculate_magnetization(params::Parameters, A::Array{ComplexF64,
     return @tensor C[a,a]
 end
 
+export tensor_calculate_correlation
+
+function tensor_calculate_correlation(params::Parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+    #A=reshape(A,params.χ,params.χ,2,2)
+    B=zeros(ComplexF64,params.χ,params.χ)
+    D=zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b]=A[a,b,c,d]*op[c,d]
+    T=deepcopy(B)
+    C=deepcopy(B)
+    @tensor C[a,b] = B[a,c]*T[c,b]
+    for _ in 1:params.N-2
+        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
+        C=deepcopy(D)
+    end
+    return @tensor C[a,a]
+end
+
 function increase_bond_dimension(params::Parameters, A::Array{ComplexF64}, step::Int)
     params.χ+=step
     new_A = 0.001*rand(ComplexF64,params.χ,params.χ,4)#2,2)
@@ -137,8 +154,10 @@ function tensor_purity(params::Parameters, A::Array{ComplexF64})
     B=rand(ComplexF64,params.χ,params.χ,params.χ,params.χ)
     @tensor B[a,b,u,v] = A[a,b,f,e]*A[u,v,e,f]#conj(A[a,b,e,f])*A[u,v,e,f]
     C=deepcopy(B)
+    D=deepcopy(B)
     for _ in 1:params.N-1
-        @tensor C[a,b,u,v] = C[a,c,u,d]*B[c,b,d,v]
+        @tensor D[a,b,u,v] = C[a,c,u,d]*B[c,b,d,v]
+        C=deepcopy(D)
         #B=C
     end
     return @tensor C[a,a,u,u]
