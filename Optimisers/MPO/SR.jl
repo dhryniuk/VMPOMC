@@ -415,15 +415,21 @@ function MPI_mean!(optimizer::SR{T}, mpi_cache) where {T<:Complex{<:AbstractFloa
     MPI.Allreduce!(par_cache.ΔLL, +, mpi_cache.comm)
     MPI.Allreduce!(par_cache.S, +, mpi_cache.comm)
     MPI.Allreduce!(par_cache.avg_G, +, mpi_cache.comm)
+    #MPI.Allreduce!(par_cache.acceptance, +, mpi_cache.comm)
 
     mlL = [par_cache.mlL]
     MPI.Reduce!(mlL, +, mpi_cache.comm, root=0)
+
+    acceptance = [par_cache.acceptance]
+    MPI.Reduce!(acceptance, +, mpi_cache.comm, root=0)
+
     if mpi_cache.rank == 0
         par_cache.mlL = mlL[1]/mpi_cache.nworkers
         par_cache.L∂L./=mpi_cache.nworkers
         par_cache.ΔLL./=mpi_cache.nworkers
         par_cache.S./=mpi_cache.nworkers
         par_cache.avg_G./=mpi_cache.nworkers
+        par_cache.acceptance=acceptance[1]/mpi_cache.nworkers
     end
 
 end
