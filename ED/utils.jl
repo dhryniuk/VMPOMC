@@ -1,6 +1,6 @@
-export eigen_sparse, set_parameters, calculate_Kac_norm
-export ⊗, id, sx, sy, sz, sp, sm, smx
+export eigen_sparse, set_parameters
 
+export id, sx, sy, sz, sp, sm
 
 
 function eigen_sparse(x)
@@ -17,7 +17,6 @@ sy = [0.0+0.0im 0.0-1im; 0.0+1im 0.0+0.0im]
 sz = [1.0+0.0im 0.0+0.0im; 0.0+0.0im -1.0+0.0im]
 sp = (sx+1im*sy)/2
 sm = (sx-1im*sy)/2
-smx = (sy-1im*sz)/2
 
 sp_id = sparse(id)
 sp_sx = sparse(sx)
@@ -25,51 +24,22 @@ sp_sy = sparse(sy)
 sp_sz = sparse(sz)
 sp_sp = sparse(sp)
 sp_sm = sparse(sm)
-sp_smx = sparse(smx)
 
-"""
-mutable struct parameters
-    N::Int
-    dim::Int
-    J::Float64
-    h::Float64
-    γ::Float64
-    α::Float64
-    d_max::Int
-    ϵ::Float64
-    N_K::Float64
-end
-
-function set_parameters(N,J,h,γ,α,d_max,ϵ,N_K)
-	params.N = N;
-    params.dim = 2^N;
-    params.J = J;
-    params.h = h;
-    params.γ = γ;
-    params.α = α;
-    params.d_max = d_max;
-    params.ϵ = ϵ;
-    params.N_K = N_K;
-end
-
-function set_parameters_ED(N,J,h,γ,α,d_max,ϵ,N_K)
-	params_ED.N = N;
-    params_ED.dim = 2^N;
-    params_ED.J = J;
-    params_ED.h = h;
-    params_ED.γ = γ;
-    params_ED.α = α;
-    params_ED.d_max = d_max;
-    params_ED.ϵ = ϵ;
-    params_ED.N_K = N_K;
-end
-"""
-
-function calculate_Kac_norm(d_max, α; offset=0.0) #periodic BCs only!
-    N_K = offset
-    #for i in 1:convert(Int64,floor(N/2))
-    for i in 1:d_max
-        N_K+=1/i^α
+function HarmonicNumber(n::Int,α::Float64)
+    h=0
+    for i in 1:n
+        h+=i^(-α)
     end
-    return N_K
+    return h
+end
+
+function calculate_Kac_norm(params::Parameters)
+    N = params.N
+    α = params.α
+
+    if mod(N,2)==0
+        return (2*HarmonicNumber(1+N÷2,α) - 1 - (1+N÷2)^(-α))
+    else
+        return (2*HarmonicNumber(1+(N-1)÷2,α) - 1)
+    end
 end

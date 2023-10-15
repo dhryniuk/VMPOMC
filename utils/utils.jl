@@ -72,7 +72,7 @@ function adaptive_step_size(δ, current_L, previous_L)
 end
 
 function make_density_matrix(params, A, basis)
-    ρ = zeros(ComplexF64, params.dim, params.dim)
+    ρ = zeros(ComplexF64, params.dim_H, params.dim_H)
     k=0
     for ket in basis
         k+=1
