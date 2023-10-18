@@ -82,7 +82,7 @@ function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, ϵ::Float6
             error("Unrecognized eigen-operation")
         end
     elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
-        @assert params.α>0
+        @assert params.α>=0
         optimizer = SRl1(A, sampler, SRCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, ϵ, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")

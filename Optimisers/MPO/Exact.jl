@@ -64,7 +64,7 @@ function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params:
             error("Unrecognized eigen-operation")
         end
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
-        @assert params.α>0
+        @assert params.α>=0
         optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")
@@ -106,7 +106,7 @@ function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Mat
     if eigen_op=="Ising"
         optimizer = Exactl2(A, sampler, ExactCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
     elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
-        @assert params.α>0
+        @assert params.α>=0
         optimizer = Exactl2(A, sampler, ExactCache(A, params), l1, l2, LongRangeIsing(params), params, set_workspace(A, params))
     else
         error("Unrecognized eigen-operation")
@@ -244,4 +244,21 @@ function Optimize!(optimizer::Exact{T}, basis::Basis, δ::Float64) where {T<:Com
     new_A = optimizer.A - δ*∇
     optimizer.A = new_A
     optimizer.A = normalize_MPO!(optimizer.params, optimizer.A)
+end
+
+function MPI_mean!(optimizer::Exact{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
+    par_cache = optimizer.optimizer_cache
+
+    MPI.Allreduce!(par_cache.L∂L, +, mpi_cache.comm)
+    MPI.Allreduce!(par_cache.ΔLL, +, mpi_cache.comm)
+
+    mlL = [par_cache.mlL]
+    MPI.Reduce!(mlL, +, mpi_cache.comm, root=0)
+
+    if mpi_cache.rank == 0
+        par_cache.mlL = mlL[1]/mpi_cache.nworkers
+        par_cache.L∂L./=mpi_cache.nworkers
+        par_cache.ΔLL./=mpi_cache.nworkers
+    end
+
 end

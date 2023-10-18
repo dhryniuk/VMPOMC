@@ -1,6 +1,6 @@
 export eigen_sparse, set_parameters
 
-export id, sx, sy, sz, sp, sm
+export ⊗, id, sx, sy, sz, sp, sm
 
 
 function eigen_sparse(x)

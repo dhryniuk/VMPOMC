@@ -143,6 +143,25 @@ end
 function LR_two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
     H::SparseMatrixCSC{ComplexF64, Int64} = zeros(ComplexF64, 2^params.N, 2^params.N)
     N_K = calculate_Kac_norm(params)
+    println("KAC NORM = ", N_K)
+    #exit()
+    for i::Int16 in 1:params.N-1
+        for j::Int16 in i+1:params.N
+            ops = fill(id, params.N)
+            ops[i] = op1
+            ops[j] = op2
+            dist = min(abs(i-j), abs(params.N+i-j))^params.α
+            H += 1/(dist*N_K)*foldl(⊗, ops)
+        end
+    end
+    return H
+end
+
+function old_LR_two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{ComplexF64, Int64}, op2::SparseMatrixCSC{ComplexF64, Int64}, boundary_conditions)
+    H::SparseMatrixCSC{ComplexF64, Int64} = zeros(ComplexF64, 2^params.N, 2^params.N)
+    N_K = calculate_Kac_norm(params)
+    println("KAC NORM = ", N_K)
+    #exit()
     for k in 1:convert(Int16,floor(params.N/2))
         ops = fill(id, params.N)
         ops[1] = op1
@@ -153,6 +172,5 @@ function LR_two_body_Hamiltonian_term(params::Parameters, op1::SparseMatrixCSC{C
             ops = circshift(ops,1)
         end
     end
-
     return H
 end
