@@ -18,18 +18,8 @@ include("utils/workspace.jl")
 include("utils/utils.jl")
 include("utils/mpi.jl")
 
-
-#Exact diagonalisation routines:
-include("ED/ED_Ising.jl")
-#include("ED/ED_Lindblad.jl")
-include("ED/Lindbladians.jl")
-include("ED/operators.jl")
-include("ED/observables.jl")
-include("ED/utils.jl")
-
  
 #MPS/MPO backend:
-include("MPO/MPS.jl")
 include("MPO/MPO.jl")
 include("MPO/observables.jl")
 
@@ -39,26 +29,15 @@ include("Optimisers/optimizer.jl")
 
 
 #Monte Carlo samplers:
-include("Samplers/MPS_Metropolis.jl")
 include("Samplers/MPO_Metropolis.jl")
 
 
 #Optimizer routines:
 include("Optimisers/diagonal_operators.jl")
 include("Optimisers/MPO/common.jl")
-
-include("Optimisers/MPS/Exact.jl")
-include("Optimisers/MPS/SGD.jl")
-include("Optimisers/MPS/SR.jl")
-#include("Optimisers/MPS/LM.jl")
-
 include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
-#include("Optimisers/MPO/MPI_SR.jl")
-
-
-
 
 
 end

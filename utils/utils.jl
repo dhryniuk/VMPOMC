@@ -1,10 +1,27 @@
 export make_density_matrix, adaptive_step_size
-
-export dINDEX
+export ⊗, id, sx, sy, sz, sp, sm
+#export dINDEX
 
 
 #Basis type alias:
 Basis = Vector{Vector{Bool}}
+
+
+⊗(x,y) = kron(x,y)
+
+id = [1.0+0.0im 0.0+0.0im; 0.0+0.0im 1.0+0.0im]
+sx = [0.0+0.0im 1.0+0.0im; 1.0+0.0im 0.0+0.0im]
+sy = [0.0+0.0im 0.0-1im; 0.0+1im 0.0+0.0im]
+sz = [1.0+0.0im 0.0+0.0im; 0.0+0.0im -1.0+0.0im]
+sp = (sx+1im*sy)/2
+sm = (sx-1im*sy)/2
+
+sp_id = sparse(id)
+sp_sx = sparse(sx)
+sp_sy = sparse(sy)
+sp_sz = sparse(sz)
+sp_sp = sparse(sp)
+sp_sm = sparse(sm)
 
 
 #Useful dictionaries:
