@@ -17,7 +17,6 @@ mutable struct Workspace{T<:Complex{<:AbstractFloat}}
     bra_L_l2::Matrix{T}
     ∂::Array{T,3}
     Δ::Array{T,3} #tensor of derivatives
-    #slw::SweepLindbladWorkspace{T}
     
     sample::Projector
     micro_sample::Projector
@@ -72,18 +71,3 @@ function set_workspace(A::Array{T,3}, params::Parameters) where {T<:Complex{<:Ab
         )
     return cache
 end
-
-"""
-mutable struct SweepLindbladWorkspace{T}
-    local_L::T
-    local_∇L::Array{T,3}
-    l_int::T
-end
-
-
-function Init!(slw::SweepLindbladWorkspace{T}) where {T<:Complex{<:AbstractFloat}}
-    slw.local_L = 0
-    slw.local_∇L = zeros(T,params.χ,params.χ,4)
-    slw.l_int = 0
-end
-"""

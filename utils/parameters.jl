@@ -37,20 +37,3 @@ end
 function Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
     return Parameters(N,2^N,2^(2*N),χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 end
-
-"""
-function Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
-	params.N = N;
-    params.dim_H = 2^N;
-    params.dim_L = 2^(2*N);
-    params.χ = χ;
-    params.Jx = Jx;
-    params.Jy = Jy;
-    params.J = J;
-    params.hx = hx;
-    params.hz = hz;
-    params.γ = γ;
-    params.γ_d = γ_d;
-    params.α = α;
-end
-"""

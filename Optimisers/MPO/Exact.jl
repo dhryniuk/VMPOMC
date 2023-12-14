@@ -39,8 +39,8 @@ mutable struct Exactl1{T<:Complex{<:AbstractFloat}} <: Exact{T}
     #1-local Lindbladian:
     l1::Matrix{T}
 
-    #Eigen operations:
-    eigen_ops::EigenOperations
+    #Diagonal operators:
+    eigen_ops::DiagonalOperators
     dephasing_op::Dephasing
 
     #Parameters:
@@ -89,8 +89,8 @@ mutable struct Exactl2{T<:Complex{<:AbstractFloat}} <: Exact{T}
     #2-local Lindbladian:
     l2::Matrix{T}
 
-    #Eigen operations:
-    eigen_ops::EigenOperations
+    #Diagonal operators:
+    eigen_ops::DiagonalOperators
 
     #Parameters:
     params::Parameters
@@ -244,6 +244,42 @@ function Optimize!(optimizer::Exact{T}, basis::Basis, δ::Float64) where {T<:Com
     new_A = optimizer.A - δ*∇
     optimizer.A = new_A
     optimizer.A = normalize_MPO!(optimizer.params, optimizer.A)
+end
+
+function Ising_interaction_energy(eigen_ops::Ising, sample::Projector, optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    A = optimizer.A
+    params = optimizer.params
+
+    l_int::T = 0
+    for j::UInt8 in 1:params.N-1
+        l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
+        l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
+        l_int += l_int_ket-l_int_bra
+    end
+    l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
+    l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
+    l_int += l_int_ket-l_int_bra
+    return -1.0im*params.J*l_int
+end
+
+function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}} 
+
+    A = optimizer.A
+    params = optimizer.params
+
+    l_int_ket::T = 0
+    l_int_bra::T = 0
+    l_int::T = 0
+    for i::Int16 in 1:params.N-1
+        for j::Int16 in i+1:params.N
+            l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
+            l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
+            dist = min(abs(i-j), abs(params.N+i-j))^eigen_ops.α
+            l_int += (l_int_ket-l_int_bra)/dist
+        end
+    end
+    return -1.0im*params.J*l_int/eigen_ops.Kac_norm
 end
 
 function MPI_mean!(optimizer::Exact{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
