@@ -7,3 +7,7 @@ abstract type Optimizer{T} end
 abstract type Exact{T} <: Optimizer{T} end
 
 abstract type Stochastic{T} <: Optimizer{T} end
+
+#export Optimizer
+
+

@@ -1,5 +1,5 @@
-export make_density_matrix, adaptive_step_size
-export ⊗, id, sx, sy, sz, sp, sm
+export make_density_matrix, adaptive_step_size, make_one_body_Lindbladian
+export ⊗, id, sx, sy, sz, sp, sm, generate_bit_basis
 #export dINDEX
 
 
@@ -89,3 +89,30 @@ function make_density_matrix(params, A, basis)
     return ρ
 end
 
+function make_one_body_Lindbladian(H, Γ)
+    L_H = -1im*(H⊗id - id⊗transpose(H))
+    L_D = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
+    return L_H + L_D
+end
+
+function make_two_body_Lindblad_Hamiltonian(A, B)
+    L_H = -1im*( (A⊗id)⊗(B⊗id) - (id⊗transpose(A))⊗(id⊗transpose(B)) )
+    return L_H
+end
+
+#Ising bit-basis:
+function generate_bit_basis(N)#(N::UInt8)
+    set::Vector{Vector{Bool}} = [[true], [false]]
+    @simd for i in 1:N-1
+        new_set::Vector{Vector{Bool}} = []
+        @simd for state in set
+            state2::Vector{Bool} = copy(state)
+            state = vcat(state, true)
+            state2 = vcat(state2, false)
+            push!(new_set, state)
+            push!(new_set, state2)
+        end
+        set = new_set
+    end
+    return Vector{Vector{Bool}}(set)
+end

@@ -56,8 +56,8 @@ end
 Base.display(optimizer::SGDl1) = begin
     println("\nOptimizer:")
     println("method\t\tSGD-l1")
-    println("eigen_op\t", optimizer.ising_op)
-    println("eigen_op\t", optimizer.dephasing_op)
+    println("ising_op\t", optimizer.ising_op)
+    println("dephasing_op\t", optimizer.dephasing_op)
     println("l1\t\t",optimizer.l1)
 end
 
@@ -110,11 +110,11 @@ mutable struct SGDl2{T<:Complex{<:AbstractFloat}} <: SGD{T}
 end
 
 #Constructor:
-function SGD(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, params::Parameters, eigen_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+function SGD(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, params::Parameters, ising_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
     #A = rand(ComplexF64,params.χ,params.χ,4)
-    if eigen_op=="Ising"
+    if ising_op=="Ising"
         optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
-    elseif eigen_op=="LongRangeIsing" || eigen_op=="LRIsing" || eigen_op=="Long Range Ising"
+    elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>0
         optimizer = SGDl2(A, sampler, SGDCache(A, params), l1, l2, LongRangeIsing(params), params, set_workspace(A, params))
     else
@@ -126,69 +126,6 @@ end
 function Initialize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
     optimizer.optimizer_cache = SGDCache(optimizer.A, optimizer.params)
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
-end
-
-function Ising_interaction_energy(eigen_ops::Ising, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    A = optimizer.A
-    params = optimizer.params
-
-    l_int::T=0
-    for j::UInt8 in 1:params.N-1
-        l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
-        l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
-        l_int += l_int_ket-l_int_bra
-    end
-    l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
-    l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
-    l_int += l_int_ket-l_int_bra
-    return -1.0im*params.J*l_int
-end
-
-function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    A = optimizer.A
-    params = optimizer.params
-
-    l_int_ket::T = 0.0
-    l_int_bra::T = 0.0
-    l_int::T = 0.0
-    for i::Int16 in 1:params.N-1
-        for j::Int16 in i+1:params.N
-            l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
-            l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
-            dist = min(abs(i-j), abs(params.N+i-j))^eigen_ops.α
-            l_int += (l_int_ket-l_int_bra)/dist
-        end
-    end
-    return -1.0im*params.J*l_int/eigen_ops.Kac_norm
-end
-
-function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    params = optimizer.params
-
-    l::T=0
-    for j::UInt8 in 1:params.N
-        l_ket = (2*sample.ket[j]-1)
-        l_bra = (2*sample.bra[j]-1)
-        l += (l_ket*l_bra-1)
-    end
-    return params.γ_d*l
-end
-
-function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    params = optimizer.params
-
-    l_ket::T=0
-    l_bra::T=0
-    for j::UInt8 in 1:params.N
-        l_ket += (2*sample.ket[j]-1)
-        l_bra += (2*sample.bra[j]-1)
-        #l += (l_ket*l_bra-1)
-    end
-    return params.γ_d*(l_ket*l_bra-0.5*(l_ket^2+l_bra^2))
 end
 
 function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) where {T<:Complex{<:AbstractFloat}} 

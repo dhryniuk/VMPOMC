@@ -21,10 +21,11 @@ const J = 0.5 #interaction strength
 const hz= 0.0 #transverse field strength
 const γ = 1.0 #spin decay rate
 #const γ_d = 0.0 #spin decay rate
-const α=0#0000
+const α=1#0000
 #const N=10
 #χ=12 #bond dimension
 #const burn_in = 0
+
 
 #set values from command line optional parameters:
 N = parse(Int64,ARGS[1])
@@ -35,25 +36,12 @@ hx = parse(Float64,ARGS[2])
 
 params = Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 
-function make_one_body_Lindbladian(H, Γ)
-    L_H = -1im*(H⊗id - id⊗transpose(H))
-    L_D = Γ⊗conj(Γ) - (conj(transpose(Γ))*Γ)⊗id/2 - id⊗(transpose(Γ)*conj(Γ))/2
-    return L_H + L_D
-end
-#const l1 = conj( make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm) )
 const l1 = make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm)
-
-#const basis=generate_bit_basis_reversed(N)
-
-function make_two_body_Lindblad_Hamiltonian(A, B)
-    L_H = -1im*( (A⊗id)⊗(B⊗id) - (id⊗transpose(A))⊗(id⊗transpose(B)) )
-    return L_H
-end
 
 N_MC::Int64 = 10*4*χ^2
 δ::Float64 = 0.01
 F::Float64 = 0.9999
-ϵ::Float64 = parse(Float64,ARGS[4])#0.01
+ϵ::Float64 = parse(Float64,ARGS[4])
 N_iterations::Int64 = 10000
 last_iteration_step::Int64 = 1
 
@@ -79,8 +67,7 @@ if mpi_cache.rank == 0
         A=reshape(A,χ,χ,4)
 
         sampler = MetropolisSampler(N_MC, 0)
-        optimizer = SR(sampler, A, l1, ϵ, params, "Ising", "Local")
-        #optimizer = Exact(sampler, A, l1, params, "LRIsing", "Local")
+        optimizer = Optimizer("SR", sampler, A, l1, ϵ, params, "LRIsing", "Local")
 
         list_of_parameters = open("Ising_decay_chi$(χ)_N$(N)_hx$(hx)_γd$(γ_d).params", "w")
         redirect_stdout(list_of_parameters)
@@ -118,9 +105,7 @@ MPI.bcast(last_iteration_step, mpi_cache.comm)
 MPI.Bcast!(A, 0, mpi_cache.comm)
 
 sampler = MetropolisSampler(N_MC, 0)
-optimizer = SR(sampler, A, l1, ϵ, params, "Ising", "Local")
-#optimizer = Exact(sampler, A, l1, params, "LRIsing", "Local")
-
+optimizer = Optimizer("SR", sampler, A, l1, ϵ, params, "LRIsing", "Local")
 
 
 if mpi_cache.rank == 0
@@ -128,7 +113,6 @@ if mpi_cache.rank == 0
 end
 for k in last_iteration_step:N_iterations
     for i in 1:1
-
         if mpi_cache.rank == 0
             global a = time()
         end

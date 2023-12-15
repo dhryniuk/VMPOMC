@@ -64,8 +64,8 @@ Base.display(optimizer::SRl1) = begin
     println("\nOptimizer:")
     println("method\t\tSR-l1")
     println("ϵ\t\t", optimizer.ϵ)
-    println("eigen_op\t", optimizer.ising_op)
-    println("eigen_op\t", optimizer.dephasing_op)
+    println("ising_op\t", optimizer.ising_op)
+    println("dephasing_op\t", optimizer.dephasing_op)
     println("l1\t\t",optimizer.l1)
 end
 
@@ -145,69 +145,6 @@ function Initialize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
 
-function Ising_interaction_energy(eigen_ops::Ising, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    A = optimizer.A
-    params = optimizer.params
-
-    l_int::T=0
-    for j::UInt8 in 1:params.N-1
-        l_int_ket = (2*sample.ket[j]-1)*(2*sample.ket[j+1]-1)
-        l_int_bra = (2*sample.bra[j]-1)*(2*sample.bra[j+1]-1)
-        l_int += l_int_ket-l_int_bra
-    end
-    l_int_ket = (2*sample.ket[params.N]-1)*(2*sample.ket[1]-1)
-    l_int_bra = (2*sample.bra[params.N]-1)*(2*sample.bra[1]-1)
-    l_int += l_int_ket-l_int_bra
-    return -1.0im*params.J*l_int
-end
-
-function Ising_interaction_energy(eigen_ops::LongRangeIsing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    A = optimizer.A
-    params = optimizer.params
-
-    l_int_ket::T = 0.0
-    l_int_bra::T = 0.0
-    l_int::T = 0.0
-    for i::Int16 in 1:params.N-1
-        for j::Int16 in i+1:params.N
-            l_int_ket = (2*sample.ket[i]-1)*(2*sample.ket[j]-1)
-            l_int_bra = (2*sample.bra[i]-1)*(2*sample.bra[j]-1)
-            dist = min(abs(i-j), abs(params.N+i-j))^eigen_ops.α
-            l_int += (l_int_ket-l_int_bra)/dist
-        end
-    end
-    return -1.0im*params.J*l_int/eigen_ops.Kac_norm
-end
-
-function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    params = optimizer.params
-
-    l::T=0
-    for j::UInt8 in 1:params.N
-        l_ket = (2*sample.ket[j]-1)
-        l_bra = (2*sample.bra[j]-1)
-        l += (l_ket*l_bra-1)
-    end
-    return params.γ_d*l
-end
-
-function Dephasing_term(dephasing_op::CollectiveDephasing, sample::Projector, optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} 
-
-    params = optimizer.params
-
-    l_ket::T=0
-    l_bra::T=0
-    for j::UInt8 in 1:params.N
-        l_ket += (2*sample.ket[j]-1)
-        l_bra += (2*sample.bra[j]-1)
-        #l += (l_ket*l_bra-1)
-    end
-    return params.γ_d*(l_ket*l_bra-0.5*(l_ket^2+l_bra^2))
-end
-
 
 #### REPLACE WITH HOLY TRAITS ---
 
@@ -274,8 +211,7 @@ function UpdateSR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
     conj_G = conj(G)
     avg_G.+= G
     mul!(workspace.plus_S,conj_G,transpose(G))
-    S.+=workspace.plus_S   #use when l1 is unconjugated
-    #S.+=conj(cache.plus_S)
+    S.+=workspace.plus_S 
 end
 
 function Reconfigure!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor

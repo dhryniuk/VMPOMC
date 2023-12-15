@@ -38,6 +38,6 @@ include("Optimisers/MPO/common.jl")
 include("Optimisers/MPO/Exact.jl")
 include("Optimisers/MPO/SGD.jl")
 include("Optimisers/MPO/SR.jl")
-
+include("Optimisers/optimizer_dispatch.jl")
 
 end
