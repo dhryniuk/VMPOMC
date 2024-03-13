@@ -38,6 +38,8 @@ params = Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
 
 const l1 = make_one_body_Lindbladian(hx*sx+hz*sz,sqrt(γ)*sm)
 
+basis = generate_bit_basis(N)
+
 N_MC::Int64 = 10*4*χ^2
 δ::Float64 = 0.01
 F::Float64 = 0.9999
@@ -139,9 +141,15 @@ for k in last_iteration_step:N_iterations
         Af = reshape(optimizer.A,χ,χ,2,2) 
         Af_dagger = conj.(permutedims(Af,[1,2,4,3]))
 
-        mx = real(tensor_calculate_magnetization(params,Af,sx))
-        my = real(tensor_calculate_magnetization(params,Af,sy))
-        mz = real(tensor_calculate_magnetization(params,Af,sz))
+        ρ = compute_density_matrix(params,A,basis)
+        display(ρ)
+        ρ = compute_density_matrix(params,Af,basis)
+        display(ρ)
+        error()
+
+        mx = real( 0.5*( tensor_calculate_magnetization(params,Af,sx) + tensor_calculate_magnetization(params,Af_dagger,sx) ) )
+        my = real( 0.5*( tensor_calculate_magnetization(params,Af,sy) + tensor_calculate_magnetization(params,Af_dagger,sy) ) )
+        mz = real( 0.5*( tensor_calculate_magnetization(params,Af,sz) + tensor_calculate_magnetization(params,Af_dagger,sz) ) )
 
         sxx = real( tensor_calculate_correlation(params,Af,sx))
         syy = real( tensor_calculate_correlation(params,Af,sy))

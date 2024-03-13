@@ -4,6 +4,23 @@ export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magneti
 export hermetize_MPO, increase_bond_dimension, L_MPO_strings!, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 
+export compute_density_matrix
+function compute_density_matrix(params::Parameters, A::Array{ComplexF64}, basis)
+    ρ = zeros(length(basis)^2, length(basis)^2)
+    k=0
+    for ket in basis
+        k+=1
+        b=0
+        for bra in basis
+            b+=1
+            sample = Projector(ket,bra)
+            p = MPO(params,sample,A)
+            ρ[k,b] = p
+        end
+    end
+    return ρ
+end
+
 function hermetize_MPO(params::Parameters, A::Array{ComplexF64})
     A=reshape(A,params.χ,params.χ,2,2)
     new_A = deepcopy(A)
@@ -195,4 +212,32 @@ function one_body_reduced_density_matrix(params::Parameters, A::Array{ComplexF64
     @tensor ρ_1[c,d] = B[a,a,c,d]
     return ρ_1
 end
+
+"""
+function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
+
+    params=optimizer.params
+    A=optimizer.A
+    data=optimizer.optimizer_cache
+    cache = optimizer.workspace
+
+    local_L = 0
+    l_int = 0
+
+    ρ_sample::T = tr(cache.R_set[params.N+1])
+    cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
+
+    #Sweep lattice:
+    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)
+
+
+    #Add in Ising interaction terms:
+    l_int = Ising_interaction_energy(optimizer.ising_op, sample, optimizer)
+    l_int += Dephasing_term(optimizer.dephasing_op, sample, optimizer)
+    local_L  +=l_int
+
+    #Mean local Lindbladian:
+    data.mlL += local_L*conj(local_L)
+end
+"""
 
