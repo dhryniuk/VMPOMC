@@ -11,7 +11,7 @@ struct LongRangeIsing <: IsingInteraction
     Kac_norm::Float64
 end
 
-function HarmonicNumber(n::Int,α::Float64)
+function HarmonicNumber(n::Int, α::Float64)
     h=0
     for i in 1:n
         h+=i^(-α)

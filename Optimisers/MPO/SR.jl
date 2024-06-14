@@ -1,4 +1,4 @@
-export SR, Optimize!, ComputeGradient!, MPI_mean!, MPI_normalize!
+export SR, optimize!, compute_gradient!, MPI_mean!, MPI_normalize!
 
 
 mutable struct SRCache{T} <: StochasticCache
@@ -23,7 +23,7 @@ function SRCache(A::Array{T,3},params::Parameters) where {T<:Complex{<:AbstractF
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
         convert(T,0),
-        0.0,#convert(UInt64,0),
+        0.0,
         zeros(T,params.χ,params.χ,4),
         zeros(T,4*params.χ^2,4*params.χ^2),
         zeros(T,4*params.χ^2)
@@ -72,20 +72,20 @@ end
 
 #Constructor:
 function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, ϵ::Float64, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
-    #A = rand(ComplexF64,params.χ,params.χ,4)
+
     if ising_op=="Ising"
         if dephasing_op=="Local"
             optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), LocalDephasing(), params, ϵ, set_workspace(A, params))
         elseif dephasing_op=="Collective"
             optimizer = SRl1(A, sampler, SRCache(A, params), l1, Ising(), CollectiveDephasing(), params, ϵ, set_workspace(A, params))
         else
-            error("Unrecognized eigen-operation")
+            error("Unrecognized dephasing operator")
         end
     elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>=0
         optimizer = SRl1(A, sampler, SRCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, ϵ, set_workspace(A, params))
     else
-        error("Unrecognized eigen-operation")
+        error("Unrecognized Ising interaction")
     end
     return optimizer
 end
@@ -122,25 +122,26 @@ end
 
 #Constructor:
 function SR(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, ϵ::Float64, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
-    #A = rand(ComplexF64,params.χ,params.χ,4)
+
     if ising_op=="Ising"
         if dephasing_op=="Local"
             optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), LocalDephasing(), params, ϵ, set_workspace(A, params))
         elseif dephasing_op=="Collective"
             optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, Ising(), CollectiveDephasing(), params, ϵ, set_workspace(A, params))
         else
-            error("Unrecognized eigen-operation")
+            error("Unrecognized dephasing operator")
         end
     elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>0
         optimizer = SRl2(A, sampler, SRCache(A, params), l1, l2, LongRangeIsing(params), LocalDephasing(), params, ϵ, set_workspace(A, params))
     else
-        error("Unrecognized eigen-operation")
+        error("Unrecognized Ising interaction")
     end
     return optimizer
 end
 
-function Initialize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+function initialize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+
     optimizer.optimizer_cache = SRCache(optimizer.A, optimizer.params)
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
@@ -148,14 +149,14 @@ end
 
 #### REPLACE WITH HOLY TRAITS ---
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) where {T<:Complex{<:AbstractFloat}} 
+function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
-    micro_sample = optimizer.workspace.micro_sample
-    micro_sample = Projector(sample)
+    sub_sample = optimizer.workspace.sub_sample
+    sub_sample = Projector(sample)
 
     temp_local_L::T = 0
-    temp_local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
+    temp_local_∇L::Array{T,3} = zeros(T, params.χ, params.χ, 4)
     #temp_local_L = optimizer.workspace.temp_local_L
     #temp_local_L = 0.0+0.0im
     #temp_local_∇L = optimizer.workspace.temp_local_∇L
@@ -163,37 +164,37 @@ function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) whe
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        temp_local_L, temp_local_∇L = one_body_Lindblad_term!(temp_local_L, temp_local_∇L, sample, micro_sample, j, optimizer)
+        temp_local_L, temp_local_∇L = one_body_Lindblad_term!(temp_local_L, temp_local_∇L, sample, sub_sample, j, optimizer)
     end
 
-    temp_local_L  /= ρ_sample
-    temp_local_∇L./= ρ_sample
+    temp_local_L /= ρ_sample
+    temp_local_∇L ./= ρ_sample
 
     return temp_local_L, temp_local_∇L
 end
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}) where {T<:Complex{<:AbstractFloat}} 
+function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}) where {T<:Complex{<:AbstractFloat}} 
 
-    params=optimizer.params
-    micro_sample = optimizer.workspace.micro_sample
-    micro_sample = Projector(sample)
+    params = optimizer.params
+    sub_sample = optimizer.workspace.sub_sample
+    sub_sample = Projector(sample)
 
     local_L::T = 0
     local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
     for j::UInt8 in 1:params.N-1
-        local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
     if params.N>2
-        local_L, local_∇L = boundary_two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, optimizer)
+        local_L, local_∇L = boundary_two_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, optimizer)
     end
 
-    local_L  /= ρ_sample
-    local_∇L./= ρ_sample
+    local_L /= ρ_sample
+    local_∇L ./= ρ_sample
 
     return local_L, local_∇L
 end
@@ -201,20 +202,21 @@ end
 #### ---.
 
 
-function UpdateSR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+function update_SR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+
     S::Array{T,2} = optimizer.optimizer_cache.S
     avg_G::Vector{T} = optimizer.optimizer_cache.avg_G
     params::Parameters = optimizer.params
-    workspace = optimizer.workspace
+    ws = optimizer.workspace
     
-    G::Vector{T} = reshape(workspace.Δ,4*params.χ^2)
+    G::Vector{T} = reshape(ws.Δ,4*params.χ^2)
     conj_G = conj(G)
-    avg_G.+= G
-    mul!(workspace.plus_S,conj_G,transpose(G))
-    S.+=workspace.plus_S 
+    avg_G .+= G
+    mul!(ws.plus_S,conj_G,transpose(G))
+    S .+= ws.plus_S 
 end
 
-function Reconfigure!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor
+function reconfigure!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor
 
     data = optimizer.optimizer_cache
     N_MC = optimizer.sampler.N_MC
@@ -222,67 +224,59 @@ function Reconfigure!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} #...
     params = optimizer.params
 
     #Compute metric tensor:
-    data.S./=N_MC
-    data.avg_G./=N_MC
+    data.S ./= N_MC
+    data.avg_G ./= N_MC
     conj_avg_G = conj(data.avg_G)
-    data.S-=data.avg_G*transpose(conj_avg_G) ##THIS IS CORRECT
+    data.S -= data.avg_G*transpose(conj_avg_G)
 
     #Regularize the metric tensor:
     data.S+=ϵ*Matrix{Int}(I, params.χ*params.χ*4, params.χ*params.χ*4)
 
     #Reconfigure gradient:
     grad::Array{eltype(data.S),3} = (data.L∂L-data.ΔLL)/N_MC
-    flat_grad::Vector{eltype(data.S)} = reshape(grad,4*params.χ^2)
+    flat_grad::Vector{eltype(data.S)} = reshape(grad, 4*params.χ^2)
     flat_grad = inv(data.S)*flat_grad
-    data.∇ = reshape(flat_grad,params.χ,params.χ,4)
+    data.∇ = reshape(flat_grad, params.χ, params.χ, 4)
 end
 
-function Finalize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+function finalize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+
     N_MC = optimizer.sampler.N_MC
     data = optimizer.optimizer_cache
 
     data.mlL /= N_MC
-    data.ΔLL .= conj.(data.ΔLL) #remember to take the complex conjugate
+    data.ΔLL .= conj.(data.ΔLL)
     data.ΔLL .*= data.mlL
-    #Reconfigure!(data,N_MC,optimizer.ϵ,optimizer.params)
-
-    #optimizer.optimizer_cache.acceptance/=(optimizer.params.N*N_MC)
 end
 
-function ComputeGradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
+function compute_gradient!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
 
-    Initialize!(optimizer)
+    initialize!(optimizer)
     sample = optimizer.workspace.sample
 
-    sample = MPO_Metropolis_burn_in(optimizer)
+    sample = Metropolis_burn_in!(optimizer)
 
     for _ in 1:optimizer.sampler.N_MC
-
         #Generate sample:
-        sample, acc = Mono_Metropolis_sweep_left(sample, optimizer)
+        sample, acc = Metropolis_sweep_left!(sample, optimizer)
         optimizer.optimizer_cache.acceptance += acc/(optimizer.params.N*optimizer.sampler.N_MC)
 
         #Compute local estimators:
-        Update!(optimizer, sample) 
+        update!(optimizer, sample) 
 
         #Update metric tensor:
-        UpdateSR!(optimizer)
+        update_SR!(optimizer)
     end
-    #Finalize!(optimizer)
-
-    #Reconfigure!(optimizer.optimizer_cache,optimizer.sampler.N_MC,optimizer.ϵ,optimizer.params)
 end
 
-function Optimize!(optimizer::SR{T}, δ::Float64) where {T<:Complex{<:AbstractFloat}}
+function optimize!(optimizer::SR{T}, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
-    #ComputeGradient!(optimizer)
+    finalize!(optimizer)
 
-    Finalize!(optimizer)
+    reconfigure!(optimizer)
 
-    Reconfigure!(optimizer)
-
-    ∇  = optimizer.optimizer_cache.∇
-    ∇./= maximum(abs.(∇))
+    ∇ = optimizer.optimizer_cache.∇
+    ∇ ./= maximum(abs.(∇))
 
     new_A = similar(optimizer.A)
     new_A = optimizer.A - δ*∇
@@ -291,27 +285,27 @@ function Optimize!(optimizer::SR{T}, δ::Float64) where {T<:Complex{<:AbstractFl
 end
 
 function MPI_mean!(optimizer::SR{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
-    par_cache = optimizer.optimizer_cache
 
-    MPI.Allreduce!(par_cache.L∂L, +, mpi_cache.comm)
-    MPI.Allreduce!(par_cache.ΔLL, +, mpi_cache.comm)
-    MPI.Allreduce!(par_cache.S, +, mpi_cache.comm)
-    MPI.Allreduce!(par_cache.avg_G, +, mpi_cache.comm)
-    #MPI.Allreduce!(par_cache.acceptance, +, mpi_cache.comm)
+    par_data = optimizer.optimizer_cache
 
-    mlL = [par_cache.mlL]
+    MPI.Allreduce!(par_data.L∂L, +, mpi_cache.comm)
+    MPI.Allreduce!(par_data.ΔLL, +, mpi_cache.comm)
+    MPI.Allreduce!(par_data.S, +, mpi_cache.comm)
+    MPI.Allreduce!(par_data.avg_G, +, mpi_cache.comm)
+    #MPI.Allreduce!(par_data.acceptance, +, mpi_cache.comm)
+
+    mlL = [par_data.mlL]
     MPI.Reduce!(mlL, +, mpi_cache.comm, root=0)
 
-    acceptance = [par_cache.acceptance]
+    acceptance = [par_data.acceptance]
     MPI.Reduce!(acceptance, +, mpi_cache.comm, root=0)
 
     if mpi_cache.rank == 0
-        par_cache.mlL = mlL[1]/mpi_cache.nworkers
-        par_cache.L∂L./=mpi_cache.nworkers
-        par_cache.ΔLL./=mpi_cache.nworkers
-        par_cache.S./=mpi_cache.nworkers
-        par_cache.avg_G./=mpi_cache.nworkers
-        par_cache.acceptance=acceptance[1]/mpi_cache.nworkers
+        par_data.mlL = mlL[1]/mpi_cache.nworkers
+        par_data.L∂L ./= mpi_cache.nworkers
+        par_data.ΔLL ./= mpi_cache.nworkers
+        par_data.S ./= mpi_cache.nworkers
+        par_data.avg_G ./= mpi_cache.nworkers
+        par_data.acceptance = acceptance[1]/mpi_cache.nworkers
     end
-
 end

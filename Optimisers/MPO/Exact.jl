@@ -1,7 +1,8 @@
-export Exact, Optimize!, ComputeGradient!
+export Exact, optimize!, compute_gradient!
 
 
 mutable struct ExactCache{T} <: OptimizerCache
+
     #Ensemble averages:
     L∂L::Array{T,3}
     ΔLL::Array{T,3}
@@ -15,6 +16,7 @@ mutable struct ExactCache{T} <: OptimizerCache
 end
 
 function ExactCache(A::Array{T,3}, params::Parameters) where {T<:Complex{<:AbstractFloat}} 
+
     exact=ExactCache(
         zeros(T,params.χ,params.χ,4),
         zeros(T,params.χ,params.χ,4),
@@ -64,6 +66,7 @@ end
 
 #Constructor:
 function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params::Parameters, ising_op::String="Ising", dephasing_op::String="Local") where {T<:Complex{<:AbstractFloat}} 
+
     basis::Basis=generate_bit_basis(params.N)
     if ising_op=="Ising"
         #optimizer = Exactl1(A, sampler, ExactCache(A, params), l1, Ising(), params, set_workspace(A, params))
@@ -72,13 +75,13 @@ function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, params:
         elseif dephasing_op=="Collective"
             optimizer = Exactl1(basis, A, sampler, ExactCache(A, params), l1, Ising(), CollectiveDephasing(), params, set_workspace(A, params))
         else
-            error("Unrecognized Ising operators")
+            error("Unrecognized dephasing operator")
         end
     elseif ising_op=="LongRangeIsing" || ising_op=="LRIsing" || ising_op=="Long Range Ising"
         @assert params.α>=0
         optimizer = Exactl1(basis, A, sampler, ExactCache(A, params), l1, LongRangeIsing(params), LocalDephasing(), params, set_workspace(A, params))
     else
-        error("Unrecognized Ising operators")
+        error("Unrecognized Ising interaction")
     end
     return optimizer
 end
@@ -125,6 +128,7 @@ end
 
 #Constructor:
 function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Matrix{T}, params::Parameters, ising_op::String="Ising") where {T<:Complex{<:AbstractFloat}} 
+
     basis::Basis=generate_bit_basis(params.N)
     if ising_op=="Ising"
         optimizer = Exactl2(basis, A, sampler, ExactCache(A, params), l1, l2, Ising(), params, set_workspace(A, params))
@@ -132,137 +136,134 @@ function Exact(sampler::MetropolisSampler, A::Array{T,3}, l1::Matrix{T}, l2::Mat
         @assert params.α>=0
         optimizer = Exactl2(basis, A, sampler, ExactCache(A, params), l1, l2, LongRangeIsing(params), params, set_workspace(A, params))
     else
-        error("Unrecognized eigen-operation")
+        error("Unrecognized Ising interaction")
     end    
     return optimizer
 end
 
-function Initialize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
+function initialize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
+
     optimizer.optimizer_cache = ExactCache(optimizer.A, optimizer.params)
     optimizer.workspace = set_workspace(optimizer.A, optimizer.params)
 end
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl1{T}) where {T<:Complex{<:AbstractFloat}} 
+function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl1{T}) where {T<:Complex{<:AbstractFloat}} 
 
     params = optimizer.params
-    micro_sample = optimizer.workspace.micro_sample
-    micro_sample = Projector(sample)
+    sub_sample = optimizer.workspace.sub_sample
+    sub_sample = Projector(sample)
 
     local_L::T = 0
     local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
 
-    local_L  /= ρ_sample
-    local_∇L./= ρ_sample
+    local_L /= ρ_sample
+    local_∇L ./= ρ_sample
 
     return local_L, local_∇L
 end
 
-function SweepLindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl2{T}) where {T<:Complex{<:AbstractFloat}} 
+function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl2{T}) where {T<:Complex{<:AbstractFloat}} 
 
-    params=optimizer.params
-    micro_sample = optimizer.workspace.micro_sample
-    micro_sample = Projector(sample)
+    params = optimizer.params
+    sub_sample = optimizer.workspace.sub_sample
+    sub_sample = Projector(sample)
 
     local_L::T = 0
     local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
 
     #Calculate L∂L*:
     for j::UInt8 in 1:params.N
-        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
     for j::UInt8 in 1:params.N-1
-        local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, j, optimizer)
+        local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
     if params.N>2
-        local_L, local_∇L = boundary_two_body_Lindblad_term!(local_L, local_∇L, sample, micro_sample, optimizer)
+        local_L, local_∇L = boundary_two_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, optimizer)
     end
 
-    local_L  /= ρ_sample
-    local_∇L./= ρ_sample
+    local_L /= ρ_sample
+    local_∇L ./= ρ_sample
 
     return local_L, local_∇L
 end
 
-function Update!(optimizer::Exact{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
+function update!(optimizer::Exact{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
 
-    params=optimizer.params
-    A=optimizer.A
-    data=optimizer.optimizer_cache
-    cache = optimizer.workspace
+    params = optimizer.params
+    A = optimizer.A
+    data = optimizer.optimizer_cache
+    ws = optimizer.workspace
 
     #Initialize auxiliary arrays:
     local_L::T = 0
     local_∇L::Array{T,3} = zeros(T,params.χ,params.χ,4)
     l_int::T = 0
-    cache.local_∇L_diagonal_coeff = 0
+    ws.local_∇L_diagonal_coeff = 0
 
-    cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
-    cache.R_set = R_MPO_strings!(cache.R_set, sample,A,params,cache)
+    ws.L_set = L_MPO_products!(ws.L_set, sample, A, params, workspace)
+    ws.R_set = R_MPO_products!(ws.R_set, sample, A, params, workspace)
 
-    ρ_sample::T = tr(cache.L_set[params.N+1])
+    ρ_sample::T = tr(L_set[params.N+1])
     p_sample::T = ρ_sample*conj(ρ_sample)
     data.Z += p_sample
 
-    cache.Δ = ∂MPO(sample, cache.L_set, cache.R_set, params, cache)./ρ_sample
+    ws.Δ = ∂MPO(sample, L_set, R_set, params, ws)./ρ_sample
 
     #Sweep lattice:
-    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)
+    local_L, local_∇L = sweep_Lindblad!(sample, ρ_sample, optimizer)
 
     #Add in diagonal part of the local derivative:
-    local_∇L.+= cache.local_∇L_diagonal_coeff.*cache.Δ
+    local_∇L .+= ws.local_∇L_diagonal_coeff.*ws.Δ
 
     #Add in interaction terms:
     l_int = Ising_interaction_energy(optimizer.ising_op, sample, optimizer)
-    local_L  += l_int
-    local_∇L.+= l_int*cache.Δ
+    local_L += l_int
+    local_∇L .+= l_int*ws.Δ
 
     #Update L∂L* ensemble average:
-    data.L∂L.+= p_sample*local_L*conj(local_∇L)
+    data.L∂L .+= p_sample*local_L*conj(local_∇L)
 
     #Update ΔLL ensemble average:
-    data.ΔLL.+= p_sample*cache.Δ
+    data.ΔLL .+= p_sample*ws.Δ
 
     #Mean local Lindbladian:
     data.mlL += real(p_sample*local_L*conj(local_L))
 end
 
-function Finalize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
+function finalize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
 
-    data=optimizer.optimizer_cache
+    data = optimizer.optimizer_cache
 
-    data.mlL/=data.Z
-    data.ΔLL.=conj.(data.ΔLL) #remember to take the complex conjugate
-    data.ΔLL.*=data.mlL
+    data.mlL /= data.Z
+    data.ΔLL .= conj.(data.ΔLL)
+    data.ΔLL .*= data.mlL
     data.∇ = (data.L∂L-data.ΔLL)/data.Z
 end
 
-function ComputeGradient!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
-    basis=optimizer.basis
+function compute_gradient!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
 
-    Initialize!(optimizer)
+    initialize!(optimizer)
 
     for k in 1:optimizer.params.dim_H
         for l in 1:optimizer.params.dim_H
-            sample = Projector(basis[k],basis[l])
-            Update!(optimizer, sample) 
+            sample = Projector(optimizer.basis[k], optimizer.basis[l])
+            update!(optimizer, sample) 
         end
     end
-
-    #Finalize!(optimizer)
 end
 
-function Optimize!(optimizer::Exact{T}, δ::Float64) where {T<:Complex{<:AbstractFloat}}
+function optimize!(optimizer::Exact{T}, δ::Float64) where {T<:Complex{<:AbstractFloat}}
 
-    #ComputeGradient!(optimizer, basis)
-    Finalize!(optimizer)
+    finalize!(optimizer)
 
     ∇ = optimizer.optimizer_cache.∇
-    ∇./=maximum(abs.(∇))
+    ∇ ./= maximum(abs.(∇))
 
     new_A = similar(optimizer.A)
     new_A = optimizer.A - δ*∇
@@ -271,18 +272,19 @@ function Optimize!(optimizer::Exact{T}, δ::Float64) where {T<:Complex{<:Abstrac
 end
 
 function MPI_mean!(optimizer::Exact{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
-    par_cache = optimizer.optimizer_cache
 
-    MPI.Allreduce!(par_cache.L∂L, +, mpi_cache.comm)
-    MPI.Allreduce!(par_cache.ΔLL, +, mpi_cache.comm)
+    par_data = optimizer.optimizer_cache
 
-    mlL = [par_cache.mlL]
+    MPI.Allreduce!(par_data.L∂L, +, mpi_cache.comm)
+    MPI.Allreduce!(par_data.ΔLL, +, mpi_cache.comm)
+
+    mlL = [par_data.mlL]
     MPI.Reduce!(mlL, +, mpi_cache.comm, root=0)
 
     if mpi_cache.rank == 0
-        par_cache.mlL = mlL[1]/mpi_cache.nworkers
-        par_cache.L∂L./=mpi_cache.nworkers
-        par_cache.ΔLL./=mpi_cache.nworkers
+        par_data.mlL = mlL[1]/mpi_cache.nworkers
+        par_data.L∂L ./= mpi_cache.nworkers
+        par_data.ΔLL ./= mpi_cache.nworkers
     end
 
 end

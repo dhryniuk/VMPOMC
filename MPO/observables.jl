@@ -1,72 +1,78 @@
 export calculate_z_magnetization, calculate_x_magnetization, calculate_y_magnetization, tensor_calculate_z_magnetization, calculate_spin_spin_correlation, calculate_steady_state_structure_factor
 
 #temporary:
-export hermetize_MPO, increase_bond_dimension, L_MPO_strings!, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
+export hermetize_MPO, increase_bond_dimension, L_MPO_products!, density_matrix, calculate_purity, calculate_Renyi_entropy, tensor_purity
 
 
 export compute_density_matrix
 function compute_density_matrix(params::Parameters, A::Array{ComplexF64}, basis)
-    ρ = zeros(length(basis)^2, length(basis)^2)
-    k=0
+    
+    ρ = zeros(ComplexF64,length(basis), length(basis))
+    k = 0
     for ket in basis
-        k+=1
-        b=0
+        k += 1
+        b = 0
         for bra in basis
-            b+=1
-            sample = Projector(ket,bra)
-            p = MPO(params,sample,A)
-            ρ[k,b] = p
+            b += 1
+            sample = Projector(ket, bra)
+            p = MPO(params, sample, A)
+            ρ[k, b] = p
         end
     end
     return ρ
 end
 
 function hermetize_MPO(params::Parameters, A::Array{ComplexF64})
-    A=reshape(A,params.χ,params.χ,2,2)
+
+    A = reshape(A,params.χ,params.χ,2,2)
     new_A = deepcopy(A)
-    new_A[:,:,1,2]=0.5*(A[:,:,1,2]+A[:,:,2,1])
-    new_A[:,:,2,1]=conj(new_A[:,:,1,2])
-    new_A[:,:,1,1]=real(new_A[:,:,1,1])
-    new_A[:,:,2,2]=real(new_A[:,:,2,2])
+    new_A[:,:,1,2] = 0.5*(A[:,:,1,2]+A[:,:,2,1])
+    new_A[:,:,2,1] = conj(new_A[:,:,1,2])
+    new_A[:,:,1,1] = real(new_A[:,:,1,1])
+    new_A[:,:,2,2] = real(new_A[:,:,2,2])
     return reshape(new_A,params.χ,params.χ,4)#::ComplexF64
 end
 
 function calculate_x_magnetization(params::Parameters, A::Array{ComplexF64})
-    mp=Matrix{Int}(I, params.χ, params.χ)
+
+    mp = Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1
-        mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
+        mp *= A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
     end
-    mp*=A[:,:,dINDEX[(1,0)]]+A[:,:,dINDEX[(0,1)]]
+    mp *= A[:,:,dINDEX[(1,0)]]+A[:,:,dINDEX[(0,1)]]
     return tr(mp)
 end
 
 function calculate_y_magnetization(params::Parameters, A::Array{ComplexF64})
-    mp=Matrix{Int}(I, params.χ, params.χ)
+
+    mp = Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1
-        mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
+        mp *= A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
     end
-    mp*=(A[:,:,dINDEX[(1,0)]]-A[:,:,dINDEX[(0,1)]])*1im
+    mp *= (A[:,:,dINDEX[(1,0)]]-A[:,:,dINDEX[(0,1)]])*1im
     return -tr(mp)
 end
 
 function calculate_z_magnetization(params::Parameters, A::Array{ComplexF64})
-    mp=Matrix{Int}(I, params.χ, params.χ)
+
+    mp = Matrix{Int}(I, params.χ, params.χ)
     for i in 1:params.N-1
-        mp*=A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
+        mp *= A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
     end
-    mp*=-A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
+    mp *= -A[:,:,dINDEX[(1,1)]]+A[:,:,dINDEX[(0,0)]]
     return tr(mp)
 end
 
 function tensor_calculate_z_magnetization(params::Parameters, A::Array{ComplexF64})
-    A=reshape(A,params.χ,params.χ,2,2)
-    B=zeros(ComplexF64,params.χ,params.χ)
-    D=zeros(ComplexF64,params.χ,params.χ)
-    @tensor B[a,b]=A[a,b,c,d]*sz[c,d]
-    C=deepcopy(B)
+    
+    A = reshape(A,params.χ,params.χ,2,2)
+    B = zeros(ComplexF64,params.χ,params.χ)
+    D = zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b] = A[a,b,c,d]*sz[c,d]
+    C = deepcopy(B)
     for _ in 1:params.N-1
         @tensor D[a,b] = C[a,c]*A[c,b,e,e]
-        C=deepcopy(D)
+        C = deepcopy(D)
     end
     return @tensor C[a,a]
 end
@@ -74,11 +80,11 @@ end
 export tensor_calculate_magnetization
 
 function tensor_calculate_magnetization(params::Parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
-    #A=reshape(A,params.χ,params.χ,2,2)
-    B=zeros(ComplexF64,params.χ,params.χ)
-    D=zeros(ComplexF64,params.χ,params.χ)
-    @tensor B[a,b]=A[a,b,c,d]*op[c,d]
-    C=deepcopy(B)
+    
+    B = zeros(ComplexF64,params.χ,params.χ)
+    D = zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
+    C = deepcopy(B)
     for _ in 1:params.N-1
         @tensor D[a,b] = C[a,c]*A[c,b,e,e]
         C=deepcopy(D)
@@ -86,15 +92,29 @@ function tensor_calculate_magnetization(params::Parameters, A::Array{ComplexF64,
     return @tensor C[a,a]
 end
 
+function tensor_calculate_magnetization(N::Int64, χ::Int64, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+
+    B = zeros(ComplexF64,χ,χ)
+    D = zeros(ComplexF64,χ,χ)
+    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
+    C = deepcopy(B)
+    for _ in 1:N-1
+        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
+        C = deepcopy(D)
+    end
+    return @tensor C[a,a]
+end
+
+
 export tensor_calculate_correlation
 
 function tensor_calculate_correlation(params::Parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
-    #A=reshape(A,params.χ,params.χ,2,2)
-    B=zeros(ComplexF64,params.χ,params.χ)
-    D=zeros(ComplexF64,params.χ,params.χ)
-    @tensor B[a,b]=A[a,b,c,d]*op[c,d]
-    T=deepcopy(B)
-    C=deepcopy(B)
+
+    B = zeros(ComplexF64,params.χ,params.χ)
+    D = zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
+    T = deepcopy(B)
+    C = deepcopy(B)
     @tensor C[a,b] = B[a,c]*T[c,b]
     for _ in 1:params.N-2
         @tensor D[a,b] = C[a,c]*A[c,b,e,e]
@@ -103,9 +123,53 @@ function tensor_calculate_correlation(params::Parameters, A::Array{ComplexF64,4}
     return @tensor C[a,a]
 end
 
+function tensor_calculate_correlation(N::Int64, χ::Int64, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+
+    B = zeros(ComplexF64,χ,χ)
+    D = zeros(ComplexF64,χ,χ)
+    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
+    T = deepcopy(B)
+    C = deepcopy(B)
+    @tensor C[a,b] = B[a,c]*T[c,b]
+    for _ in 1:N-2
+        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
+        C = deepcopy(D)
+    end
+    return @tensor C[a,a]
+end
+
+export tensor_calculate_nnn_correlation
+
+function tensor_calculate_nnn_correlation(params::Parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+
+    B = zeros(ComplexF64,params.χ,params.χ)
+    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
+    T = deepcopy(B)
+    @tensor B[a,b] := B[a,c]*A[c,b,e,e]
+    @tensor B[a,b] := B[a,c]*T[c,b]
+    for _ in 1:params.N-3
+        @tensor B[a,b] := B[a,c]*A[c,b,e,e]
+    end
+    return @tensor B[a,a]
+end
+
+function tensor_calculate_nnn_correlation(N::Int64, χ::Int64, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+    
+    B = zeros(ComplexF64,χ,χ)
+    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
+    T = deepcopy(B)
+    @tensor B[a,b] := B[a,c]*A[c,b,e,e]
+    @tensor B[a,b] := B[a,c]*T[c,b]
+    for _ in 1:N-3
+        @tensor B[a,b] := B[a,c]*A[c,b,e,e]
+    end
+    return @tensor B[a,a]
+end
+
 function increase_bond_dimension(params::Parameters, A::Array{ComplexF64}, step::Int)
-    params.χ+=step
-    new_A = 0.001*rand(ComplexF64,params.χ,params.χ,4)#2,2)
+    
+    params.χ += step
+    new_A = 0.001*rand(ComplexF64,params.χ,params.χ,4)
     for i in 1:4
         for j in 1:params.χ-step
             for k in 1:params.χ-step
@@ -113,42 +177,29 @@ function increase_bond_dimension(params::Parameters, A::Array{ComplexF64}, step:
             end
         end
     end
-    new_A./=normalize_MPO!(MPOMC.params, new_A)
+    new_A ./= normalize_MPO!(MPOMC.params, new_A)
     return new_A
 end
 
 function calculate_spin_spin_correlation(params::Parameters, A::Array{ComplexF64}, op, dist::Int)
-    A=reshape(A,params.χ,params.χ,2,2)
-    B=zeros(ComplexF64,params.χ,params.χ)
-    D=zeros(ComplexF64,params.χ,params.χ)
-    E=zeros(ComplexF64,params.χ,params.χ)
+    A = reshape(A,params.χ,params.χ,2,2)
+    B = zeros(ComplexF64,params.χ,params.χ)
+    D = zeros(ComplexF64,params.χ,params.χ)
+    E = zeros(ComplexF64,params.χ,params.χ)
     @tensor B[a,b] = A[a,b,f,e]*op[e,f]#conj(A[a,b,e,f])*A[u,v,e,f]
     @tensor D[a,b] = A[a,b,f,f]
-    C=deepcopy(B)
+    C = deepcopy(B)
     for _ in 1:dist-1
         @tensor E[a,b] = C[a,c]*D[c,b]
-        C=deepcopy(E)
+        C = deepcopy(E)
     end
     @tensor E[a,b] = C[a,c]*B[c,b]
-    C=deepcopy(E)
+    C = deepcopy(E)
     for _ in 1:params.N-1-dist
         @tensor E[a,b] = C[a,c]*D[c,b]
-        C=deepcopy(E)
+        C = deepcopy(E)
     end
     return @tensor C[a,a]
-end
-
-function calculate_steady_state_structure_factor(params::Parameters, A::Array{ComplexF64})
-    sssf = 0
-    for j in 1:params.N
-        for l in 1:params.N
-            if l!=j
-                dist = min(abs(l-j), abs(params.N+l-j))
-                sssf+= calculate_spin_spin_correlation(params, A, sx, dist)
-            end
-        end
-    end
-    return sssf/(params.N*(params.N-1))
 end
 
 function calculate_purity(params::Parameters, A::Array{ComplexF64})
@@ -212,32 +263,3 @@ function one_body_reduced_density_matrix(params::Parameters, A::Array{ComplexF64
     @tensor ρ_1[c,d] = B[a,a,c,d]
     return ρ_1
 end
-
-"""
-function Update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
-
-    params=optimizer.params
-    A=optimizer.A
-    data=optimizer.optimizer_cache
-    cache = optimizer.workspace
-
-    local_L = 0
-    l_int = 0
-
-    ρ_sample::T = tr(cache.R_set[params.N+1])
-    cache.L_set = L_MPO_strings!(cache.L_set, sample,A,params,cache)
-
-    #Sweep lattice:
-    local_L, local_∇L = SweepLindblad!(sample, ρ_sample, optimizer)
-
-
-    #Add in Ising interaction terms:
-    l_int = Ising_interaction_energy(optimizer.ising_op, sample, optimizer)
-    l_int += Dephasing_term(optimizer.dephasing_op, sample, optimizer)
-    local_L  +=l_int
-
-    #Mean local Lindbladian:
-    data.mlL += local_L*conj(local_L)
-end
-"""
-
