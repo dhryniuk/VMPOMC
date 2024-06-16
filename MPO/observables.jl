@@ -79,32 +79,19 @@ end
 
 export tensor_calculate_magnetization
 
-function tensor_calculate_magnetization(params::Parameters, A::Array{ComplexF64,4}, op::Array{ComplexF64})
+function tensor_calculate_magnetization(optimizer::Optimizer{T}, op::Array{ComplexF64}) where {T<:Complex{<:AbstractFloat}}
     
-    B = zeros(ComplexF64,params.χ,params.χ)
-    D = zeros(ComplexF64,params.χ,params.χ)
-    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
-    C = deepcopy(B)
+    A = optimizer.A
+    params = optimizer.params
+
+    Af = reshape(A,params.χ,params.χ,2,2)
+    B = zeros(T,params.χ,params.χ)
+    @tensor B[a,b] := Af[a,b,c,d]*op[c,d]
     for _ in 1:params.N-1
-        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
-        C=deepcopy(D)
+        @tensor B[a,b] := B[a,c]*Af[c,b,e,e]
     end
-    return @tensor C[a,a]
+    return @tensor B[a,a]
 end
-
-function tensor_calculate_magnetization(N::Int64, χ::Int64, A::Array{ComplexF64,4}, op::Array{ComplexF64})
-
-    B = zeros(ComplexF64,χ,χ)
-    D = zeros(ComplexF64,χ,χ)
-    @tensor B[a,b] = A[a,b,c,d]*op[c,d]
-    C = deepcopy(B)
-    for _ in 1:N-1
-        @tensor D[a,b] = C[a,c]*A[c,b,e,e]
-        C = deepcopy(D)
-    end
-    return @tensor C[a,a]
-end
-
 
 export tensor_calculate_correlation
 
