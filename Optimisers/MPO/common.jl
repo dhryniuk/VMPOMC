@@ -1,5 +1,4 @@
 function one_body_Lindblad_term!(local_L::T, local_∇L::Array{T,3}, sample::Projector, sub_sample::Projector, j::UInt8, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
-
     l1 = optimizer.l1
     A = optimizer.A
     params = optimizer.params
@@ -37,7 +36,6 @@ function one_body_Lindblad_term!(local_L::T, local_∇L::Array{T,3}, sample::Pro
 end
 
 function two_body_Lindblad_term!(local_L::T, local_∇L::Array{T,3}, sample::Projector, sub_sample::Projector, k::UInt8, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
-
     l2 = optimizer.l2
     A = optimizer.A
     params = optimizer.params
@@ -79,7 +77,6 @@ function two_body_Lindblad_term!(local_L::T, local_∇L::Array{T,3}, sample::Pro
 end
 
 function Ising_interaction_energy(ising_op::Ising, sample::Projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
-
     A = optimizer.A
     params = optimizer.params
 
@@ -96,7 +93,6 @@ function Ising_interaction_energy(ising_op::Ising, sample::Projector, optimizer:
 end
 
 function Ising_interaction_energy(ising_op::LongRangeIsing, sample::Projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
-
     A = optimizer.A
     params = optimizer.params
 
@@ -115,7 +111,6 @@ function Ising_interaction_energy(ising_op::LongRangeIsing, sample::Projector, o
 end
 
 function Dephasing_term(dephasing_op::LocalDephasing, sample::Projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
 
     l::T=0

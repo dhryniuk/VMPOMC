@@ -2,6 +2,7 @@ export SR, optimize!, compute_gradient!, MPI_mean!, MPI_normalize!
 
 
 mutable struct SRCache{T} <: StochasticCache
+    
     #Ensemble averages:
     L∂L::Array{T,3}
     ΔLL::Array{T,3}
@@ -150,7 +151,6 @@ end
 #### REPLACE WITH HOLY TRAITS ---
 
 function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
     sub_sample = optimizer.workspace.sub_sample
     sub_sample = Projector(sample)
@@ -174,7 +174,6 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SRl1{T}) wh
 end
 
 function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SRl2{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
     sub_sample = optimizer.workspace.sub_sample
     sub_sample = Projector(sample)
@@ -203,7 +202,6 @@ end
 
 
 function update_SR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
-
     S::Array{T,2} = optimizer.optimizer_cache.S
     avg_G::Vector{T} = optimizer.optimizer_cache.avg_G
     params::Parameters = optimizer.params
@@ -217,30 +215,35 @@ function update_SR!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
 end
 
 function reconfigure!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}} #... the gradient tensor
-
     data = optimizer.optimizer_cache
     N_MC = optimizer.sampler.N_MC
     ϵ = optimizer.ϵ
     params = optimizer.params
 
     #Compute metric tensor:
-    data.S ./= N_MC
-    data.avg_G ./= N_MC
+    rmul!(data.S, 1/N_MC)
+    rmul!(data.avg_G, 1/N_MC)
     conj_avg_G = conj(data.avg_G)
     data.S -= data.avg_G*transpose(conj_avg_G)
 
-    #Regularize the metric tensor:
-    data.S+=ϵ*Matrix{Int}(I, params.χ*params.χ*4, params.χ*params.χ*4)
-
-    #Reconfigure gradient:
-    grad::Array{eltype(data.S),3} = (data.L∂L-data.ΔLL)/N_MC
-    flat_grad::Vector{eltype(data.S)} = reshape(grad, 4*params.χ^2)
+    # Regularize the metric tensor
+    @inbounds for i in 1:size(data.S, 1)
+        data.S[i,i] += ϵ
+    end
+    
+    # Reconfigure gradient
+    grad_size = (params.χ, params.χ, 4)
+    flat_grad_size = 4*params.χ^2
+    
+    grad = reshape(view(data.L∂L, :), grad_size) .- reshape(view(data.ΔLL, :), grad_size)
+    rmul!(grad, 1/N_MC)
+    flat_grad = reshape(grad, flat_grad_size)
+    
     flat_grad = inv(data.S)*flat_grad
     data.∇ = reshape(flat_grad, params.χ, params.χ, 4)
 end
 
 function finalize!(optimizer::SR{T}) where {T<:Complex{<:AbstractFloat}}
-
     N_MC = optimizer.sampler.N_MC
     data = optimizer.optimizer_cache
 

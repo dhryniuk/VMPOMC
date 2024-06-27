@@ -131,7 +131,6 @@ function initialize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
 end
 
 function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
     sub_sample = optimizer.workspace.sub_sample
     sub_sample = Projector(sample)
@@ -140,7 +139,7 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) w
     temp_local_∇L::Array{T,3} = zeros(T, params.χ, params.χ, 4)
 
     #Calculate L∂L*:
-    for j::UInt8 in 1:params.N
+    @inbounds for j::UInt8 in 1:params.N
         temp_local_L, temp_local_∇L = one_body_Lindblad_term!(temp_local_L, temp_local_∇L, sample, sub_sample, j, optimizer)
     end
 
@@ -151,7 +150,6 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl1{T}) w
 end
 
 function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
     sub_sample = optimizer.workspace.sub_sample
     sub_sample = Projector(sample)
@@ -160,10 +158,10 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}) w
     local_∇L::Array{T,3} = zeros(T, params.χ, params.χ, 4)
 
     #Calculate L∂L*:
-    for j::UInt8 in 1:params.N
+    @inbounds for j::UInt8 in 1:params.N
         local_L, local_∇L = one_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
-    for j::UInt8 in 1:params.N-1
+    @inbounds for j::UInt8 in 1:params.N-1
         local_L, local_∇L = two_body_Lindblad_term!(local_L, local_∇L, sample, sub_sample, j, optimizer)
     end
     if params.N>2
@@ -177,16 +175,11 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::SGDl2{T}) w
 end
 
 function update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
-
     params = optimizer.params
     A = optimizer.A
     data = optimizer.optimizer_cache
     ws = optimizer.workspace
 
-    #Initialize auxiliary arrays:
-    #local_L = ws.local_L
-    #local_∇L = ws.local_∇L
-    #l_int = ws.l_int
     local_L = 0
     local_∇L = zeros(T,params.χ,params.χ,4)
     l_int = 0
@@ -194,11 +187,10 @@ function update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
 
     ρ_sample::T = tr(ws.R_set[params.N+1])
     ws.L_set = L_MPO_products!(ws.L_set, sample, A, params, ws)
-    ws.Δ = ∂MPO(sample, ws.L_set, ws.R_set, params, ws)./ρ_sample
+    ws.Δ = ∂MPO(sample, ws.L_set, ws.R_set, params, ws)
+    ws.Δ ./= ρ_sample
 
-    #Sweep lattice:
     local_L, local_∇L = sweep_Lindblad!(sample, ρ_sample, optimizer)
-    #sweep_Lindblad!(sample, ρ_sample, optimizer)
 
     #Add in diagonal part of the local derivative:
     local_∇L.+=ws.local_∇L_diagonal_coeff.*ws.Δ
@@ -206,17 +198,13 @@ function update!(optimizer::Stochastic{T}, sample::Projector) where {T<:Complex{
     #Add in Ising interaction terms:
     l_int = Ising_interaction_energy(optimizer.ising_op, sample, optimizer)
     l_int += Dephasing_term(optimizer.dephasing_op, sample, optimizer)
-    local_L  +=l_int
-    local_∇L.+=l_int*ws.Δ
+    local_L += l_int
+    @. local_∇L += l_int*ws.Δ
 
-    #Update L∂L* ensemble average:
-    data.L∂L.+=local_L*conj(local_∇L)
-
-    #Update ΔLL ensemble average:
-    data.ΔLL.+=ws.Δ
-
-    #Mean local Lindbladian:
-    data.mlL += local_L*conj(local_L)
+    # Update ensemble averages
+    @. data.L∂L += local_L*conj(local_∇L)
+    data.ΔLL .+= ws.Δ
+    data.mlL += abs2(local_L)
 end
 
 function finalize!(optimizer::SGD{T}) where {T<:Complex{<:AbstractFloat}}
@@ -266,7 +254,6 @@ function optimize!(optimizer::SGD{T}, δ::Float64) where {T<:Complex{<:AbstractF
 end
 
 function MPI_mean!(optimizer::SGD{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
-    
     par_cache = optimizer.optimizer_cache
 
     MPI.Allreduce!(par_cache.L∂L, +, mpi_cache.comm)

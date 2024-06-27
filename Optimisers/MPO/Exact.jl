@@ -148,7 +148,6 @@ function initialize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
 end
 
 function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl1{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
     sub_sample = optimizer.workspace.sub_sample
     sub_sample = Projector(sample)
@@ -168,7 +167,6 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl1{T})
 end
 
 function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl2{T}) where {T<:Complex{<:AbstractFloat}} 
-
     params = optimizer.params
     sub_sample = optimizer.workspace.sub_sample
     sub_sample = Projector(sample)
@@ -194,7 +192,6 @@ function sweep_Lindblad!(sample::Projector, ρ_sample::T, optimizer::Exactl2{T})
 end
 
 function update!(optimizer::Exact{T}, sample::Projector) where {T<:Complex{<:AbstractFloat}} #... the ensemble averages etc.
-
     params = optimizer.params
     A = optimizer.A
     data = optimizer.optimizer_cache
@@ -237,7 +234,6 @@ function update!(optimizer::Exact{T}, sample::Projector) where {T<:Complex{<:Abs
 end
 
 function finalize!(optimizer::Exact{T}) where {T<:Complex{<:AbstractFloat}}
-
     data = optimizer.optimizer_cache
 
     data.mlL /= data.Z
@@ -272,7 +268,6 @@ function optimize!(optimizer::Exact{T}, δ::Float64) where {T<:Complex{<:Abstrac
 end
 
 function MPI_mean!(optimizer::Exact{T}, mpi_cache) where {T<:Complex{<:AbstractFloat}}
-
     par_data = optimizer.optimizer_cache
 
     MPI.Allreduce!(par_data.L∂L, +, mpi_cache.comm)

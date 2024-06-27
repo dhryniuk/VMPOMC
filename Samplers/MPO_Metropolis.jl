@@ -21,78 +21,93 @@ end
 
 # Sweeps lattice from right to left
 # Updates sample and R_set
-function Metropolis_sweep_left!(sample::Projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}} 
-
+function Metropolis_sweep_left!(sample::Projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}}
     A = optimizer.A
     params = optimizer.params
     ws = optimizer.workspace
-
-    acc=0
-    ws.R_set[1] = Matrix{T}(I, params.χ, params.χ)
+    acc = 0
+    
+    ws.R_set[1] = Matrix{T}(I, params.χ, params.χ)  # Identity matrix
     ws.C_mat = ws.L_set[params.N+1]
-    C = tr(ws.C_mat) #current probability amplitude
+    C = tr(ws.C_mat)  # current probability amplitude
+    
     sample_ket = sample.ket
     sample_bra = sample.bra
-    for i::UInt16 in params.N:-1:1
-        sample_p_ket = copy(sample_ket)
-        sample_p_bra = copy(sample_bra)
-        draw = draw_excluded(dINDEX[(sample_ket[i], sample_bra[i])])
-        (sample_p_ket[i], sample_p_bra[i]) = dREVINDEX[draw]
-        mul!(ws.Metro_1, ws.L_set[i], @view(A[:,:,draw]))
+    
+    @inbounds for i in params.N:-1:1
+        current_index = dINDEX[(sample_ket[i], sample_bra[i])]
+        draw = draw_excluded(current_index)
+        new_ket, new_bra = dREVINDEX[draw]
+        
+        mul!(ws.Metro_1, ws.L_set[i], view(A, :, :, draw))
         mul!(ws.Metro_2, ws.Metro_1, ws.R_set[params.N+1-i])
-        P=tr(ws.Metro_2) #proposal probability amplitude
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        P = tr(ws.Metro_2)  # proposal probability amplitude
+        
+        metropolis_prob = abs2(P/C)
         if rand() <= metropolis_prob
-            sample_ket = sample_p_ket
-            sample_bra = sample_p_bra
-            acc+=1
+            sample_ket[i] = new_ket
+            sample_bra[i] = new_bra
+            acc += 1
+            C = P
+        else
+            draw = current_index
         end
-        mul!(ws.R_set[params.N+2-i], @view(A[:,:,1+2*sample_ket[i]+sample_bra[i]]), ws.R_set[params.N+1-i])
+        
+        mul!(ws.R_set[params.N+2-i], view(A, :, :, draw), ws.R_set[params.N+1-i])
         mul!(ws.C_mat, ws.L_set[i], ws.R_set[params.N+2-i])
-        C = tr(ws.C_mat) #update current probability amplitude
+        C = tr(ws.C_mat)  # update current probability amplitude
     end
-    sample = Projector(sample_ket, sample_bra)
+    
+    sample.ket = sample_ket
+    sample.bra = sample_bra
     return sample, acc
 end
 
 #Sweeps lattice from left to right
 # Updates sample and L_set
-function Metropolis_sweep_right!(sample::Projector, optimizer::Optimizer)
-
+function Metropolis_sweep_right!(sample::Projector, optimizer::Optimizer{T}) where {T<:Complex{<:AbstractFloat}}
     A = optimizer.A
     params = optimizer.params
-    ws=optimizer.workspace
-
-    acc=0
-    ws.L_set[1] = Matrix{eltype(A)}(I, params.χ, params.χ)
+    ws = optimizer.workspace
+    acc = 0
+    
+    ws.L_set[1] = Matrix{T}(I, params.χ, params.χ)
     ws.C_mat = ws.R_set[params.N+1]
-    C = tr(ws.C_mat) #current probability amplitude
+    C = tr(ws.C_mat)  # current probability amplitude
+    
     sample_ket = sample.ket
     sample_bra = sample.bra
-    for i::UInt8 in 1:params.N
-        sample_p_ket = copy(sample_ket)
-        sample_p_bra = copy(sample_bra)
-        draw = draw_excluded(dINDEX[(sample.ket[i], sample.bra[i])])
-        (sample_p_ket[i], sample_p_bra[i]) = dREVINDEX[draw]
-        mul!(ws.Metro_1, ws.L_set[i], @view(A[:,:,draw]))
+    
+    @inbounds for i in 1:params.N
+        current_index = dINDEX[(sample_ket[i], sample_bra[i])]
+        draw = draw_excluded(current_index)
+        new_ket, new_bra = dREVINDEX[draw]
+        
+        mul!(ws.Metro_1, ws.L_set[i], view(A, :, :, draw))
         mul!(ws.Metro_2, ws.Metro_1, ws.R_set[params.N+1-i])
-        P=tr(ws.Metro_2) #proposal probability amplitude
-        metropolis_prob = real((P*conj(P))/(C*conj(C)))
+        P = tr(ws.Metro_2)  # proposal probability amplitude
+        
+        metropolis_prob = abs2(P / C)
         if rand() <= metropolis_prob
-            sample_ket = sample_p_ket
-            sample_bra = sample_p_bra
-            acc+=1
+            sample_ket[i] = new_ket
+            sample_bra[i] = new_bra
+            acc += 1
+            C = P
+        else
+            draw = current_index
         end
-        mul!(ws.L_set[i+1], ws.L_set[i], @view(A[:,:,1+2*sample_ket[i]+sample_bra[i]]))
+        
+        mul!(ws.L_set[i+1], ws.L_set[i], view(A, :, :, draw))
         mul!(ws.C_mat, ws.L_set[i+1], ws.R_set[params.N+1-i])
-        C = tr(ws.C_mat) #update current probability amplitude
+        C = tr(ws.C_mat)  # update current probability amplitude
     end
-    sample = Projector(sample_ket, sample_bra)
+    
+    sample.ket = sample_ket
+    sample.bra = sample_bra
     return sample, acc
 end
 
 function Metropolis_burn_in!(optimizer::Optimizer)
-
     A=optimizer.A
     params=optimizer.params
     ws=optimizer.workspace
