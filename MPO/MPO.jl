@@ -42,7 +42,7 @@ function ∂MPO(sample::Projector, L_set::Vector{<:Matrix{T}}, R_set::Vector{<:M
     cache.∂ = zeros(T, params.χ, params.χ, 4)
     @inbounds for m=1:params.N
         mul!(cache.B, R_set[params.N+1-m], L_set[m])
-        @simd for i=1:params.χ
+        for i=1:params.χ
             for j=1:params.χ
                 cache.∂[i, j, idx(sample,m)] += cache.B[j, i]
             end
@@ -50,18 +50,3 @@ function ∂MPO(sample::Projector, L_set::Vector{<:Matrix{T}}, R_set::Vector{<:M
     end
     return cache.∂
 end
-
-"""
-#Computes the tensor of derivatives of variational parameters: 
-function m∂MPO(sample::Projector, L_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, R_set::Vector{<:Matrix{<:Complex{<:AbstractFloat}}}, params::Parameters, cache::Workspace)
-
-    ∂::Array{eltype(L_set[1]),3} = zeros(eltype(L_set[1]), params.χ, params.χ, 4)
-    for m::UInt8 in 1:params.N
-        mul!(cache.B, R_set[params.N+1-m], L_set[m])
-        for i::UInt8=1:params.χ, j::UInt8=1:params.χ
-            @inbounds ∂[i, j, idx(sample,m)] += cache.B[j, i]
-        end
-    end
-    return ∂
-end
-"""
