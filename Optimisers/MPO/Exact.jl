@@ -203,14 +203,18 @@ function update!(optimizer::Exact{T}, sample::Projector) where {T<:Complex{<:Abs
     l_int::T = 0
     ws.local_∇L_diagonal_coeff = 0
 
-    ws.L_set = L_MPO_products!(ws.L_set, sample, A, params, workspace)
-    ws.R_set = R_MPO_products!(ws.R_set, sample, A, params, workspace)
+    ws.L_set = L_MPO_products!(ws.L_set, sample, A, params, ws)
+    ws.R_set = R_MPO_products!(ws.R_set, sample, A, params, ws)
 
-    ρ_sample::T = tr(L_set[params.N+1])
+    ρ_sample::T = tr(ws.L_set[params.N+1])
     p_sample::T = ρ_sample*conj(ρ_sample)
     data.Z += p_sample
 
-    ws.Δ = ∂MPO(sample, L_set, R_set, params, ws)./ρ_sample
+    if ρ_sample==0
+        println("ZERO")
+    end
+
+    ws.Δ = ∂MPO(sample, ws.L_set, ws.R_set, params, ws)./ρ_sample
 
     #Sweep lattice:
     local_L, local_∇L = sweep_Lindblad!(sample, ρ_sample, optimizer)
