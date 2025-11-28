@@ -32,8 +32,14 @@ Base.display(params::Parameters) = begin
     println("α\t\t", params.α)
 end
 
-#write a constructor that defaults to 0 whenever some parameter is not specified...
-
-function Parameters(N,χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
-    return Parameters(N,2^N,2^(2*N),χ,Jx,Jy,J,hx,hz,γ,γ_d,α)
+function Parameters(; N::Int,
+                    χ=0.0, Jx=0.0, Jy=0.0, J=0.0,
+                    hx=0.0, hz=0.0, γ=0.0, γ_d=0.0, α=0.0)
+    dim  = 2^N
+    dim2 = 2^(2*N)
+    # convert to Float64 to ensure type matches
+    return Parameters(N, dim, dim2,
+                      float(χ), float(Jx), float(Jy), float(J),
+                      float(hx), float(hz), float(γ), float(γ_d), float(α))
 end
+
